@@ -697,7 +697,7 @@ function getTopExclusivos() {
       AND (pr.original_price - pr.current_price) > 100
       AND pr.discount_percent > 30
     ORDER BY net_saving DESC
-    LIMIT 3
+    LIMIT 10
   `).all();
 }
 

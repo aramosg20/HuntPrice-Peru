@@ -20,7 +20,9 @@ const state = {
   authUser:  JSON.parse(localStorage.getItem('hp_auth_user') || 'null'),
   authPrefs: null,   // loaded from /api/auth/preferences after login
   // ── Smart search / HuntBot grid override ──
-  gridOverride: null // { source: 'search'|'huntbot', products: [...], query: '' }
+  gridOverride: null, // { source: 'search'|'huntbot', products: [...], query: '' }
+  // ── Top Exclusivos UI ──
+  exclusivosExpanded: true
 };
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -80,7 +82,24 @@ async function loadExclusivos() {
     if (!data || data.length === 0) { section.style.display = 'none'; return; }
     section.style.display = '';
     document.getElementById('exclusivosCards').innerHTML = data.map(p => buildExclusivoCard(p)).join('');
+    // Restore expanded/collapsed state
+    const wrap = document.getElementById('exclusivosCardsWrap');
+    const chevron = document.getElementById('exclusivosChevron');
+    if (wrap && !state.exclusivosExpanded) {
+      wrap.classList.add('collapsed');
+      if (chevron) chevron.style.transform = 'rotate(180deg)';
+    }
   } catch (_) { section.style.display = 'none'; }
+}
+
+function toggleExclusivos() {
+  state.exclusivosExpanded = !state.exclusivosExpanded;
+  const wrap = document.getElementById('exclusivosCardsWrap');
+  const chevron = document.getElementById('exclusivosChevron');
+  const btn = document.getElementById('exclusivosToggleBtn');
+  if (wrap) wrap.classList.toggle('collapsed', !state.exclusivosExpanded);
+  if (chevron) chevron.style.transform = state.exclusivosExpanded ? '' : 'rotate(180deg)';
+  if (btn) btn.title = state.exclusivosExpanded ? 'Ocultar sección' : 'Mostrar sección';
 }
 
 function buildExclusivoCard(p) {
@@ -1893,6 +1912,7 @@ window.openProductAlertModal = openProductAlertModal;
 window.submitProductAlert = submitProductAlert;
 window.registerUser = registerUser;
 window.loadProducts = loadProducts;
+window.toggleExclusivos = toggleExclusivos;
 window.toggleChat = toggleChat;
 window.sendChat = sendChat;
 window.submitChatNotify = submitChatNotify;

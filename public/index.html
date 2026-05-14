@@ -202,10 +202,19 @@
     <!-- Top Exclusivos -->
     <section class="exclusivos-section" id="exclusivosSection" style="display:none">
       <div class="exclusivos-header">
-        <span class="exclusivos-title">🔥 Top Exclusivas del Momento</span>
-        <span class="exclusivos-sub">Mayor ahorro real en soles</span>
+        <div class="exclusivos-header-left">
+          <span class="exclusivos-title">🔥 Top Exclusivas del Momento</span>
+          <span class="exclusivos-sub">Mayor ahorro real en soles</span>
+        </div>
+        <button class="excl-toggle-btn" id="exclusivosToggleBtn" onclick="toggleExclusivos()" title="Ocultar sección">
+          <svg class="excl-chevron" id="exclusivosChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="18 15 12 9 6 15"></polyline>
+          </svg>
+        </button>
       </div>
-      <div class="exclusivos-cards" id="exclusivosCards"></div>
+      <div class="exclusivos-cards-wrap" id="exclusivosCardsWrap">
+        <div class="exclusivos-cards" id="exclusivosCards"></div>
+      </div>
     </section>
 
     <div class="products-grid" id="productsGrid">

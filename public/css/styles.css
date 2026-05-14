@@ -338,9 +338,18 @@ input[type="range"] {
 
 .exclusivos-header {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.exclusivos-header-left {
+  display: flex;
   align-items: baseline;
   gap: 10px;
-  margin-bottom: 16px;
+  flex: 1;
+  min-width: 0;
 }
 
 .exclusivos-title {
@@ -348,25 +357,75 @@ input[type="range"] {
   font-weight: 800;
   color: var(--orange);
   letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
 .exclusivos-sub {
   font-size: 11px;
   color: var(--text3);
   font-weight: 500;
+  white-space: nowrap;
 }
 
+.excl-toggle-btn {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255,102,0,0.3);
+  background: rgba(255,102,0,0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--orange);
+  transition: background 0.2s;
+  padding: 0;
+}
+
+.excl-toggle-btn:hover { background: rgba(255,102,0,0.2); }
+
+.excl-chevron {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.35s ease;
+}
+
+/* ── Collapse/expand wrapper ────────────────────────────────────────────────── */
+.exclusivos-cards-wrap {
+  max-height: 210px;
+  overflow: hidden;
+  transition: max-height 0.35s ease-out, opacity 0.25s ease-out;
+  opacity: 1;
+}
+
+.exclusivos-cards-wrap.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+/* ── Horizontal carousel ────────────────────────────────────────────────────── */
 .exclusivos-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 6px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
 }
 
-@media (max-width: 700px) {
-  .exclusivos-cards { grid-template-columns: 1fr; }
+.exclusivos-cards::-webkit-scrollbar { height: 4px; }
+.exclusivos-cards::-webkit-scrollbar-track { background: transparent; }
+.exclusivos-cards::-webkit-scrollbar-thumb {
+  background: rgba(255,102,0,0.35);
+  border-radius: 2px;
 }
 
 .excl-card {
+  flex-shrink: 0;
+  width: 275px;
+  scroll-snap-align: start;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -376,6 +435,10 @@ input[type="range"] {
   overflow: hidden;
   cursor: pointer;
   transition: var(--transition);
+}
+
+@media (max-width: 600px) {
+  .excl-card { width: min(82vw, 280px); }
 }
 
 .excl-card:hover {
