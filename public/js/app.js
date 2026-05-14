@@ -286,9 +286,7 @@ function buildProductCard(p) {
       </div>
       <div class="card-actions" onclick="event.stopPropagation()">
         <a class="btn-buy" href="${escHtml(p.url)}" target="_blank" rel="noopener">🛒 VER OFERTA</a>
-        <button class="btn-alert ${isAlerted ? 'active' : ''}" onclick="toggleAlert(${p.id}, event)" title="Alertarme">
-          ${isAlerted ? '🔔' : '🔕'}
-        </button>
+        <button class="btn-share" onclick="shareProduct(${p.id}, event)" title="Enviar a mis canales">📤</button>
       </div>
     </div>
   </div>`;
@@ -621,10 +619,13 @@ function dismissToast(id) {
 
 // ─── Misc UI ───────────────────────────────────────────────────────────────────
 function initUI() {
-  // Close modals on overlay click
+  // Close modals on overlay click — respects data-close-fn for dirty-state modals
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) closeModal(overlay.id);
+      if (e.target !== overlay) return;
+      const fn = overlay.dataset.closeFn;
+      if (fn && typeof window[fn] === 'function') window[fn]();
+      else closeModal(overlay.id);
     });
   });
 
@@ -1373,6 +1374,257 @@ function togglePwVisible(inputId, btn) {
   btn.textContent = isText ? '👁️' : '🙈';
 }
 
+// ─── Alert Preferences Center ─────────────────────────────────────────────────
+
+const PREF_CATEGORIES = ['Electrónica', 'Bebés', 'Computación', 'Herramientas', 'Dormitorio', 'Sala', 'Decoración'];
+const PREF_STORES = ['Falabella', 'Ripley', 'Oechsle', 'Sodimac', 'Promart', 'PlazaVea', 'Mercado Libre', 'Coolbox', 'Samsung'];
+const KNOWN_CATEGORIES = [
+  'Electrónica', 'Bebés', 'Computación', 'Herramientas', 'Dormitorio', 'Sala', 'Decoración',
+  'Moda', 'Calzado', 'Muebles', 'Deportes', 'Juguetes', 'Belleza', 'Celulares', 'Electrohogar',
+  'Cocina', 'Jardín', 'Automotriz', 'Mascotas', 'Gaming', 'Tablets', 'Smartphones', 'Laptops', 'Perfumería'
+];
+
+let prefsState = { loaded: false, saved: null, current: null };
+
+function openAlertCenter() {
+  if (!state.authUser) {
+    showToast('🔒', 'Solo para miembros', 'Regístrate o ingresa para gestionar tus alertas', 'info');
+    openModal('registerModal');
+    return;
+  }
+  openModal('alertPreferencesModal');
+  loadAlertPreferences();
+}
+
+async function loadAlertPreferences() {
+  const body = document.getElementById('alertPrefsBody');
+  if (body) body.style.opacity = '0.5';
+  try {
+    const res  = await fetch('/api/auth/preferences', { headers: { Authorization: `Bearer ${state.authToken}` } });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+    prefsState.saved   = json.data;
+    prefsState.current = { ...json.data, categories: [...json.data.categories], stores: [...json.data.stores] };
+    renderAlertPreferences(prefsState.current);
+  } catch (e) {
+    showToast('❌', 'Error', 'No se pudieron cargar las preferencias', 'error');
+  } finally {
+    if (body) body.style.opacity = '1';
+  }
+}
+
+function renderAlertPreferences(prefs) {
+  const emailToggle = document.getElementById('prefNotifyEmail');
+  const waToggle    = document.getElementById('prefNotifyWA');
+  if (emailToggle) emailToggle.checked = prefs.notify_email !== false;
+  if (waToggle)    waToggle.checked    = prefs.notify_whatsapp !== false;
+
+  const waWarning = document.getElementById('prefWAWarning');
+  if (waWarning) waWarning.style.display = state.authUser?.phone ? 'none' : 'block';
+
+  renderPrefCategoryPills(prefs.categories || []);
+  renderPrefStorePills(prefs.stores || []);
+
+  const customs = (prefs.categories || []).filter(c => !PREF_CATEGORIES.includes(c));
+  renderCustomCategoryTags(customs);
+}
+
+function renderPrefCategoryPills(selected) {
+  const container = document.getElementById('prefCategoryPills');
+  if (!container) return;
+  const isAll = selected.length === 0;
+  container.innerHTML = ['Todos', ...PREF_CATEGORIES, 'Otros'].map(cat => {
+    if (cat === 'Todos') return `<button class="prefs-pill${isAll ? ' selected' : ''}" onclick="togglePrefCategory('__all__')">Todos</button>`;
+    if (cat === 'Otros') return `<button class="prefs-pill" onclick="toggleOthersCategoryInput()">Otros ✎</button>`;
+    const sel = selected.includes(cat);
+    return `<button class="prefs-pill${sel ? ' selected' : ''}" onclick="togglePrefCategory('${cat}')">${escHtml(cat)}</button>`;
+  }).join('');
+}
+
+function togglePrefCategory(cat) {
+  const prefs = prefsState.current;
+  if (!prefs) return;
+  if (cat === '__all__') {
+    prefs.categories = [];
+  } else {
+    const idx = prefs.categories.indexOf(cat);
+    if (idx >= 0) prefs.categories.splice(idx, 1);
+    else prefs.categories.push(cat);
+  }
+  renderPrefCategoryPills(prefs.categories);
+}
+
+function renderPrefStorePills(selected) {
+  const container = document.getElementById('prefStorePills');
+  if (!container) return;
+  const isAll = selected.length === 0;
+  container.innerHTML = ['Todos', ...PREF_STORES].map(store => {
+    if (store === 'Todos') return `<button class="prefs-pill${isAll ? ' selected' : ''}" onclick="togglePrefStore('__all__')">Todos</button>`;
+    const sel = selected.includes(store);
+    return `<button class="prefs-pill${sel ? ' selected' : ''}" onclick="togglePrefStore('${escHtml(store)}')">${escHtml(store)}</button>`;
+  }).join('');
+}
+
+function togglePrefStore(store) {
+  const prefs = prefsState.current;
+  if (!prefs) return;
+  if (store === '__all__') {
+    prefs.stores = [];
+  } else {
+    const idx = prefs.stores.indexOf(store);
+    if (idx >= 0) prefs.stores.splice(idx, 1);
+    else prefs.stores.push(store);
+  }
+  renderPrefStorePills(prefs.stores);
+}
+
+function normalizeForFuzzy(s) {
+  return s.toLowerCase()
+    .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e')
+    .replace(/[íìï]/g,'i').replace(/[óòö]/g,'o')
+    .replace(/[úùü]/g,'u').replace(/ñ/g,'n');
+}
+
+function toggleOthersCategoryInput() {
+  const wrap = document.getElementById('prefOthersWrap');
+  if (!wrap) return;
+  const showing = wrap.style.display !== 'none';
+  wrap.style.display = showing ? 'none' : 'block';
+  if (!showing) setTimeout(() => document.getElementById('prefOthersInput')?.focus(), 50);
+}
+
+function handleOthersCategoryInput(val) {
+  const suggEl = document.getElementById('prefSuggestions');
+  if (!suggEl) return;
+  if (!val || val.length < 2) { suggEl.style.display = 'none'; return; }
+  const norm = normalizeForFuzzy(val);
+  const matches = KNOWN_CATEGORIES.filter(c => normalizeForFuzzy(c).includes(norm)).slice(0, 5);
+  if (matches.length === 0) { suggEl.style.display = 'none'; return; }
+  suggEl.style.display = 'block';
+  suggEl.innerHTML = matches.map(m =>
+    `<div class="pref-suggestion-item" onclick="selectSuggestedCategory('${escHtml(m)}')">${escHtml(m)}</div>`
+  ).join('');
+}
+
+function selectSuggestedCategory(cat) {
+  const input  = document.getElementById('prefOthersInput');
+  const suggEl = document.getElementById('prefSuggestions');
+  if (input)  input.value = cat;
+  if (suggEl) suggEl.style.display = 'none';
+  addCustomCategory(cat);
+}
+
+function addCustomCategory(cat) {
+  const input = document.getElementById('prefOthersInput');
+  const value = (cat || input?.value || '').trim();
+  if (!value) return;
+  const prefs = prefsState.current;
+  if (!prefs) return;
+  if (!prefs.categories.includes(value)) prefs.categories.push(value);
+  if (input) input.value = '';
+  const suggEl = document.getElementById('prefSuggestions');
+  if (suggEl) suggEl.style.display = 'none';
+  renderCustomCategoryTags(prefs.categories.filter(c => !PREF_CATEGORIES.includes(c)));
+  renderPrefCategoryPills(prefs.categories);
+}
+
+function renderCustomCategoryTags(customs) {
+  const el = document.getElementById('prefCustomCategoryTags');
+  if (!el) return;
+  el.innerHTML = customs.map(c =>
+    `<span class="pref-custom-tag">${escHtml(c)} <button onclick="removeCustomCategory(this)" data-cat="${escHtml(c)}">×</button></span>`
+  ).join('');
+}
+
+function removeCustomCategory(btn) {
+  const cat   = btn.dataset.cat;
+  const prefs = prefsState.current;
+  if (!prefs || !cat) return;
+  prefs.categories = prefs.categories.filter(c => c !== cat);
+  renderCustomCategoryTags(prefs.categories.filter(c => !PREF_CATEGORIES.includes(c)));
+  renderPrefCategoryPills(prefs.categories);
+}
+
+function isPrefsStateDirty() {
+  if (!prefsState.saved || !prefsState.current) return false;
+  const s = prefsState.saved;
+  const c = prefsState.current;
+  const emailToggle = document.getElementById('prefNotifyEmail');
+  const waToggle    = document.getElementById('prefNotifyWA');
+  const curEmail = emailToggle ? emailToggle.checked : c.notify_email;
+  const curWA    = waToggle    ? waToggle.checked    : c.notify_whatsapp;
+  return s.notify_email    !== curEmail ||
+         s.notify_whatsapp !== curWA    ||
+         JSON.stringify([...s.categories].sort()) !== JSON.stringify([...c.categories].sort()) ||
+         JSON.stringify([...s.stores].sort())     !== JSON.stringify([...c.stores].sort());
+}
+
+function closeAlertPreferencesModal() {
+  if (isPrefsStateDirty()) {
+    if (!confirm('¿Seguro que deseas salir? Las preferencias no se aplicarán a tu perfil')) return;
+  }
+  closeModal('alertPreferencesModal');
+}
+
+async function saveAlertPreferences() {
+  const prefs = prefsState.current;
+  if (!prefs) return;
+
+  const emailToggle = document.getElementById('prefNotifyEmail');
+  const waToggle    = document.getElementById('prefNotifyWA');
+  prefs.notify_email    = emailToggle ? emailToggle.checked : true;
+  prefs.notify_whatsapp = waToggle    ? waToggle.checked    : true;
+
+  const btn = document.querySelector('#alertPreferencesModal .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+
+  try {
+    const res  = await fetch('/api/auth/preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.authToken}` },
+      body: JSON.stringify(prefs)
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+    prefsState.saved = { ...prefs, categories: [...prefs.categories], stores: [...prefs.stores] };
+    closeModal('alertPreferencesModal');
+    showToast('✅', 'Preferencias guardadas', 'Recibirás alertas según tus preferencias', 'success');
+  } catch (e) {
+    showToast('❌', 'Error', e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar preferencias'; }
+  }
+}
+
+// ─── Share Product ─────────────────────────────────────────────────────────────
+
+async function shareProduct(productId, event) {
+  if (event) event.stopPropagation();
+
+  if (!state.authUser) {
+    showToast('🔒', 'Solo para miembros', 'Ingresa o regístrate para compartir ofertas', 'info');
+    openModal('loginModal');
+    return;
+  }
+
+  const btn = document.querySelector(`[data-id="${productId}"] .btn-share`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+
+  try {
+    const res  = await fetch(`/api/share-product/${productId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.authToken}` }
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+    showToast('📤', 'Información enviada', json.message || 'Enviado a tus canales activados', 'success');
+  } catch (e) {
+    showToast('❌', 'Error al enviar', e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📤'; }
+  }
+}
+
 // ─── View Toggle ───────────────────────────────────────────────────────────────
 function applyView(mode) {
   const grid = document.getElementById('productsGrid');
@@ -1422,3 +1674,16 @@ window.confirmDeleteAccount = confirmDeleteAccount;
 window.toggleUserDropdown = toggleUserDropdown;
 window.showForgotPassword = showForgotPassword;
 window.togglePwVisible = togglePwVisible;
+// alert preferences
+window.openAlertCenter = openAlertCenter;
+window.closeAlertPreferencesModal = closeAlertPreferencesModal;
+window.saveAlertPreferences = saveAlertPreferences;
+window.togglePrefCategory = togglePrefCategory;
+window.togglePrefStore = togglePrefStore;
+window.toggleOthersCategoryInput = toggleOthersCategoryInput;
+window.handleOthersCategoryInput = handleOthersCategoryInput;
+window.selectSuggestedCategory = selectSuggestedCategory;
+window.addCustomCategory = addCustomCategory;
+window.removeCustomCategory = removeCustomCategory;
+// share
+window.shareProduct = shareProduct;

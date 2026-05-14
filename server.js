@@ -840,6 +840,74 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/auth/preferences', requireAuth, (req, res) => {
+  try {
+    const user = db.getUserById(req.authUser.id);
+    if (!user || !user.active) return res.status(401).json({ ok: false, error: 'Sesión inválida' });
+    res.json({
+      ok: true,
+      data: {
+        notify_email:    user.notify_email    !== 0,
+        notify_whatsapp: user.notify_whatsapp !== 0,
+        categories: JSON.parse(user.categories || '[]'),
+        stores:     JSON.parse(user.stores     || '[]')
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.put('/api/auth/preferences', requireAuth, (req, res) => {
+  try {
+    const { notify_email, notify_whatsapp, categories, stores } = req.body;
+    db.updateAuthUserPreferences(req.authUser.id, { notify_email, notify_whatsapp, categories, stores });
+    res.json({ ok: true, message: 'Preferencias guardadas' });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/share-product/:id', requireAuth, async (req, res) => {
+  try {
+    const user = db.getUserById(req.authUser.id);
+    if (!user || !user.active) return res.status(401).json({ ok: false, error: 'No autenticado' });
+
+    const product = db.getProductDetail(parseInt(req.params.id));
+    if (!product) return res.status(404).json({ ok: false, error: 'Producto no encontrado' });
+
+    const latestPrice = (product.prices || []).slice(-1)[0] || {};
+    const payload = {
+      store: product.store, name: product.name, url: product.url, image_url: product.image_url,
+      current_price:    latestPrice.current_price    || 0,
+      original_price:   latestPrice.original_price   || 0,
+      discount_percent: latestPrice.discount_percent  || 0,
+      urgency_score:    latestPrice.urgency_score     || 5,
+      detected_at:      latestPrice.detected_at       || new Date().toISOString()
+    };
+
+    const sent = [];
+
+    if (user.notify_email !== 0 && user.email) {
+      try { await sendOfferEmail(user, payload); sent.push('email'); }
+      catch (e) { console.warn('[Share] Email failed:', e.message); }
+    }
+    if (user.notify_whatsapp !== 0 && user.phone) {
+      try {
+        await notifyWhatsApp({ whatsapp: `+51${user.phone}` }, payload);
+        sent.push('WhatsApp');
+      } catch (e) { console.warn('[Share] WA failed:', e.message); }
+    }
+
+    if (sent.length === 0) {
+      return res.json({ ok: false, error: 'No tienes canales de notificación activos. Actívalos en tus preferencias.' });
+    }
+    res.json({ ok: true, message: `Información enviada a tus canales activados (${sent.join(' y ')})` });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
 function requireAdmin(req, res, next) {

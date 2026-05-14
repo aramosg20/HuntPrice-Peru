@@ -401,6 +401,23 @@ function softDeleteUser(id) {
   ).run(id);
 }
 
+function updateAuthUserPreferences(userId, data) {
+  getDb().prepare(`
+    UPDATE users SET
+      notify_email = ?,
+      notify_whatsapp = ?,
+      categories = ?,
+      stores = ?
+    WHERE id = ?
+  `).run(
+    data.notify_email ? 1 : 0,
+    data.notify_whatsapp ? 1 : 0,
+    JSON.stringify(data.categories || []),
+    JSON.stringify(data.stores || []),
+    userId
+  );
+}
+
 // ─── Logs ────────────────────────────────────────────────────────────────────
 
 function logScrape(data) {
@@ -603,5 +620,6 @@ module.exports = {
   getUserByToken, updateUserProfile, getProductsForChat, searchProductsByKeyword,
   purgeExpiredOffers, getTopExclusivos,
   // auth
-  createAuthUser, getUserByEmail, getUserById, isPhoneTaken, softDeleteUser
+  createAuthUser, getUserByEmail, getUserById, isPhoneTaken, softDeleteUser,
+  updateAuthUserPreferences
 };

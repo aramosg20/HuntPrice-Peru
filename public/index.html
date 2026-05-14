@@ -45,6 +45,27 @@
     /* ── Chat locked state ── */
     .chat-locked-msg{text-align:center;padding:24px 16px}
     .chat-locked-msg .lock-icon{font-size:36px;margin-bottom:10px}
+    /* ── Alert Preferences Modal ── */
+    .prefs-section{margin-bottom:20px}
+    .prefs-section-title{font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+    .pref-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+    .pref-toggle-row:last-of-type{border-bottom:none}
+    .pref-toggle-label{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text1)}
+    .toggle-switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0}
+    .toggle-switch input{opacity:0;width:0;height:0;position:absolute}
+    .toggle-slider{position:absolute;cursor:pointer;inset:0;background:var(--bg3);border:1px solid var(--border);transition:.3s;border-radius:24px}
+    .toggle-slider::before{position:absolute;content:'';height:18px;width:18px;left:2px;bottom:2px;background:var(--text3);transition:.3s;border-radius:50%}
+    input:checked+.toggle-slider{background:var(--orange);border-color:var(--orange)}
+    input:checked+.toggle-slider::before{transform:translateX(20px);background:#fff}
+    .prefs-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+    .prefs-pill{border:1px solid var(--border);background:var(--bg3);color:var(--text2);border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;transition:.15s;user-select:none}
+    .prefs-pill:hover{border-color:var(--orange);color:var(--orange)}
+    .prefs-pill.selected{background:var(--orange);color:#fff;border-color:var(--orange)}
+    .pref-suggestions{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:10px;z-index:30;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+    .pref-suggestion-item{padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text1)}
+    .pref-suggestion-item:hover{background:var(--bg3);color:var(--orange)}
+    .pref-custom-tag{display:inline-flex;align-items:center;gap:4px;background:rgba(255,102,0,.12);color:var(--orange);border:1px solid rgba(255,102,0,.3);border-radius:14px;padding:3px 10px;font-size:11px;font-weight:600}
+    .pref-custom-tag button{background:none;border:none;cursor:pointer;color:var(--orange);font-size:14px;padding:0;line-height:1;margin-left:2px}
   </style>
 </head>
 <body>
@@ -60,7 +81,7 @@
       <span class="live-dot"></span>
       EN VIVO
     </div>
-    <button class="btn-icon" onclick="openModal('alertModal')" title="Suscribirse a alertas">🔔</button>
+    <button class="btn-icon" onclick="openAlertCenter()" title="Preferencias de alertas">🔔</button>
     <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="Cambiar tema">☀️</button>
     <span id="profileNavBtn"></span>
     <a href="/manual.html" class="btn-icon" title="Manual de uso">📖</a>
@@ -204,7 +225,7 @@
   <p>🔥 HuntPrice Perú &mdash; Monitor automático de precios · Actualizado cada 15 min</p>
   <p style="margin-top:6px">
     <a href="/admin">Admin</a> &nbsp;·&nbsp;
-    <button onclick="openModal('alertModal')" style="background:none;border:none;color:var(--orange);cursor:pointer;font-size:12px">Suscribirse</button>
+    <button onclick="openAlertCenter()" style="background:none;border:none;color:var(--orange);cursor:pointer;font-size:12px">Preferencias</button>
   </p>
 </footer>
 
@@ -420,6 +441,78 @@
         ¿Ya tienes cuenta?
         <button class="auth-link" onclick="closeModal('registerModal');openModal('loginModal')">Ingresa aquí</button>
       </p>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Modal: Preferencias de Alertas ─────────────────────────────────────── -->
+<div class="modal-overlay" id="alertPreferencesModal" data-close-fn="closeAlertPreferencesModal">
+  <div class="modal" style="max-width:500px;width:100%">
+    <div class="modal-header">
+      <h2>🔔 Preferencias de Alertas</h2>
+      <button class="modal-close" onclick="closeAlertPreferencesModal()">✕</button>
+    </div>
+    <div class="modal-body" id="alertPrefsBody">
+
+      <!-- Canales -->
+      <div class="prefs-section">
+        <div class="prefs-section-title">Canales de notificación</div>
+        <div class="pref-toggle-row">
+          <span class="pref-toggle-label">✉️ Email</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="prefNotifyEmail" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="pref-toggle-row">
+          <span class="pref-toggle-label">💬 WhatsApp</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="prefNotifyWA" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div id="prefWAWarning" style="display:none;font-size:11px;color:var(--yellow);margin-top:8px;line-height:1.5">
+          ⚠️ No tienes número de celular registrado.
+          <a href="#" onclick="closeModal('alertPreferencesModal');openModal('registerModal');return false"
+            style="color:var(--orange);text-decoration:underline">Actualiza tu perfil</a> para recibir alertas por WhatsApp.
+        </div>
+      </div>
+
+      <!-- Categorías -->
+      <div class="prefs-section">
+        <div class="prefs-section-title">
+          Categorías
+          <span style="font-size:10px;color:var(--text3);font-weight:400;letter-spacing:0;text-transform:none"> · vacío = todas</span>
+        </div>
+        <div class="prefs-pills" id="prefCategoryPills"></div>
+        <div id="prefOthersWrap" style="display:none;margin-top:10px">
+          <div style="position:relative">
+            <input type="text" id="prefOthersInput" placeholder="Escribe una categoría..."
+              class="form-input" style="font-size:13px;padding:8px 12px"
+              oninput="handleOthersCategoryInput(this.value)"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();addCustomCategory()}">
+            <div class="pref-suggestions" id="prefSuggestions" style="display:none"></div>
+          </div>
+          <button onclick="addCustomCategory()"
+            style="margin-top:6px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);border-radius:20px;padding:4px 14px;font-size:12px;cursor:pointer">
+            + Agregar
+          </button>
+        </div>
+        <div id="prefCustomCategoryTags" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px"></div>
+      </div>
+
+      <!-- Tiendas -->
+      <div class="prefs-section">
+        <div class="prefs-section-title">
+          Tiendas
+          <span style="font-size:10px;color:var(--text3);font-weight:400;letter-spacing:0;text-transform:none"> · vacío = todas</span>
+        </div>
+        <div class="prefs-pills" id="prefStorePills"></div>
+      </div>
+
+      <button class="btn-primary" style="width:100%;margin-top:4px" onclick="saveAlertPreferences()">
+        💾 Guardar preferencias
+      </button>
     </div>
   </div>
 </div>
