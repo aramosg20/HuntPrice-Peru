@@ -126,4 +126,15 @@ async function sendGoodbyeWhatsApp(user) {
   });
 }
 
-module.exports = { notifyWhatsApp, sendDigestWhatsApp, handleIncomingMessage, testWhatsApp, resetClient, sendWelcomeWhatsApp, sendGoodbyeWhatsApp };
+async function sendReactivationWhatsApp(user) {
+  const client = getClient();
+  if (!client || !user.phone) return;
+  const name = user.username || user.name || 'amigo';
+  const to = `whatsapp:+51${user.phone}`;
+  await client.messages.create({
+    from: getFromNumber(), to,
+    body: `🎉 *¡Bienvenido de vuelta a HuntPrice Perú, ${name}!*\n\nNos alegra que hayas vuelto. Tu cuenta ha sido reactivada.\n\n🔥 Ya puedes recibir alertas de ofertas nuevamente.\n\n👉 https://huntprice.pe`
+  });
+}
+
+module.exports = { notifyWhatsApp, sendDigestWhatsApp, handleIncomingMessage, testWhatsApp, resetClient, sendWelcomeWhatsApp, sendGoodbyeWhatsApp, sendReactivationWhatsApp };

@@ -125,11 +125,14 @@
 
   <!-- Users -->
   <div class="section-card">
-    <div class="section-title">👥 Usuarios Suscritos</div>
+    <div class="section-title" style="justify-content:space-between">
+      <span>👥 Usuarios Registrados</span>
+      <button class="btn-sm orange" onclick="loadUsers()">🔄 Actualizar</button>
+    </div>
     <div class="table-wrapper">
       <table>
-        <thead><tr><th>Nombre</th><th>Email</th><th>WhatsApp</th><th>Min%</th><th>Estado</th><th>Acciones</th></tr></thead>
-        <tbody id="usersTable"><tr><td colspan="6" style="color:var(--text2)">Cargando...</td></tr></tbody>
+        <thead><tr><th>Usuario</th><th>Correo</th><th>Celular</th><th>Estado</th><th>Afiliación</th><th>Modificación</th><th>Fecha baja</th><th>Acciones</th></tr></thead>
+        <tbody id="usersTable"><tr><td colspan="8" style="color:var(--text2)">Cargando...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -400,30 +403,87 @@
   }
 
   // ── Users ──────────────────────────────────────────────────────────────────
+  function fmtDate(ts) {
+    if (!ts) return '-';
+    try {
+      return new Date(ts.replace(' ','T')+'Z').toLocaleDateString('es-PE',
+        { timeZone:'America/Lima', day:'2-digit', month:'short', year:'numeric' });
+    } catch (_) { return ts.slice(0,10); }
+  }
+
   async function loadUsers() {
     try {
       const { data } = await adminFetch('/api/admin/users');
-      document.getElementById('usersTable').innerHTML = data.map(u => `
-        <tr>
-          <td>${u.name}</td>
+      const rows = data.map(u => {
+        const banned   = u.baja_definitiva;
+        const active   = !!u.active;
+        const statusCls = banned ? 'status-error' : active ? 'status-ok' : 'status-error';
+        const statusLbl = banned ? '🚫 Bloqueado' : active ? 'Activo' : 'Inactivo';
+        const phone     = u.phone ? `🇵🇪 ${u.phone}` : (u.whatsapp || '-');
+        const actions = banned ? `
+          <span style="font-size:11px;color:var(--red)">Baja definitiva</span>
+        ` : active ? `
+          <button class="btn-sm orange" onclick="adminResetPassword(${u.id},${JSON.stringify(u.email||'')})">🔑 Reset pw</button>
+          <button class="btn-sm red" onclick="adminDeactivate(${u.id},true)">Dar de baja</button>
+          <button class="btn-sm red" style="opacity:.7" onclick="adminPermanentBan(${u.id})">🚫 Definitiva</button>
+        ` : `
+          <button class="btn-sm green" onclick="adminActivate(${u.id})">✅ Activar</button>
+          <button class="btn-sm orange" onclick="adminResetPassword(${u.id},${JSON.stringify(u.email||'')})">🔑 Reset pw</button>
+          <button class="btn-sm red" style="opacity:.7" onclick="adminPermanentBan(${u.id})">🚫 Definitiva</button>
+        `;
+        return `<tr>
+          <td style="font-weight:600">${u.username || u.name}</td>
           <td style="font-size:12px">${u.email}</td>
-          <td style="font-size:12px">${u.whatsapp || '-'}</td>
-          <td>${u.min_discount}%</td>
-          <td class="${u.active ? 'status-ok' : 'status-error'}">${u.active ? 'Activo' : 'Inactivo'}</td>
-          <td><button class="btn-sm red" onclick="deleteUser(${u.id})">Baja</button></td>
-        </tr>`).join('') || '<tr><td colspan="6" style="color:var(--text2)">Sin usuarios aún</td></tr>';
+          <td style="font-size:12px">${phone}</td>
+          <td class="${statusCls}">${statusLbl}</td>
+          <td style="font-size:11px;color:var(--text3)">${fmtDate(u.fecha_afiliacion || u.created_at)}</td>
+          <td style="font-size:11px;color:var(--text3)">${fmtDate(u.fecha_modificacion)}</td>
+          <td style="font-size:11px;color:var(--text3)">${fmtDate(u.fecha_baja)}</td>
+          <td style="white-space:nowrap;display:flex;gap:4px;flex-wrap:wrap">${actions}</td>
+        </tr>`;
+      }).join('');
+      document.getElementById('usersTable').innerHTML =
+        rows || '<tr><td colspan="8" style="color:var(--text2)">Sin usuarios aún</td></tr>';
     } catch (e) {
       document.getElementById('usersTable').innerHTML =
-        `<tr><td colspan="6" style="color:var(--red)">⚠ ${e.message}</td></tr>`;
+        `<tr><td colspan="8" style="color:var(--red)">⚠ ${e.message}</td></tr>`;
     }
   }
 
-  async function deleteUser(id) {
-    if (!confirm('¿Dar de baja este usuario?')) return;
+  async function adminResetPassword(id, email) {
+    if (!email) { showToast('⚠️', 'Sin email', 'Este usuario no tiene correo registrado'); return; }
+    if (!confirm(`¿Restablecer la contraseña de ${email}?\nSe generará una contraseña temporal y se enviará por email.`)) return;
+    try {
+      await adminFetch(`/api/admin/users/${id}/reset-password`, { method: 'POST' });
+      showToast('✅', 'Contraseña restablecida', `Email enviado a ${email}`);
+    } catch (e) { showToast('❌', 'Error', e.message); }
+  }
+
+  async function adminDeactivate(id, isActive) {
+    if (!isActive) return;
+    if (!confirm('¿Dar de baja este usuario? Podrá reactivarse en el futuro.')) return;
     try {
       await adminFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
       loadUsers();
       showToast('✅', 'Usuario dado de baja', '');
+    } catch (e) { showToast('❌', 'Error', e.message); }
+  }
+
+  async function adminActivate(id) {
+    if (!confirm('¿Reactivar esta cuenta?')) return;
+    try {
+      await adminFetch(`/api/admin/users/${id}/activate`, { method: 'PUT' });
+      loadUsers();
+      showToast('✅', 'Cuenta activada', '');
+    } catch (e) { showToast('❌', 'Error', e.message); }
+  }
+
+  async function adminPermanentBan(id) {
+    if (!confirm('⚠️ BAJA DEFINITIVA\n\nEsta acción es irreversible. El usuario no podrá volver a registrarse con este correo o celular.\n\n¿Confirmas?')) return;
+    try {
+      await adminFetch(`/api/admin/users/${id}/permanent-ban`, { method: 'POST' });
+      loadUsers();
+      showToast('🚫', 'Baja definitiva aplicada', 'El usuario ha sido bloqueado permanentemente');
     } catch (e) { showToast('❌', 'Error', e.message); }
   }
 

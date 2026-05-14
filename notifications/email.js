@@ -329,4 +329,48 @@ async function sendGoodbyeEmail(user) {
   });
 }
 
-module.exports = { notifyUsers, sendLastChance, testEmail, sendAlertConfirmation, sendOfferEmail, resetTransporter, sendWelcomeEmail, sendGoodbyeEmail };
+async function sendReactivationEmail(user) {
+  const t = getTransporter();
+  if (!t) return;
+  const name = user.username || user.name || 'amigo';
+  await t.sendMail({
+    from: `"HuntPrice Perú 🔥" <${process.env.GMAIL_USER || db.getConfig('gmail_user')}>`,
+    to: user.email,
+    subject: '🎉 ¡Bienvenido de vuelta a HuntPrice Perú!',
+    html: `<div style="font-family:Inter,Arial,sans-serif;background:#0d0d0d;color:#fff;padding:32px;border-radius:14px;max-width:520px;margin:auto">
+      <div style="font-size:48px;text-align:center;margin-bottom:12px">🎉</div>
+      <h2 style="color:#FF6600;text-align:center;margin:0 0 8px">¡Bienvenido de vuelta, ${escStr(name)}!</h2>
+      <p style="color:#ccc;text-align:center;margin:0 0 24px;font-size:14px">Nos alegra que hayas vuelto. Tu cuenta ha sido reactivada exitosamente.</p>
+      <div style="background:#1a1a1a;border-radius:10px;padding:20px;margin-bottom:20px">
+        <p style="color:#ccc;font-size:13px;line-height:1.6;margin:0">Ya tienes acceso nuevamente a HuntBot, las alertas personalizadas y todas las ofertas flash del Perú.</p>
+      </div>
+      <a href="https://huntprice.pe" style="display:block;background:#FF6600;color:#fff;text-align:center;padding:13px;border-radius:9px;text-decoration:none;font-weight:700;font-size:15px">Ver ofertas ahora →</a>
+      <p style="color:#555;font-size:11px;text-align:center;margin-top:20px">HuntPrice Perú · Monitor automático de precios</p>
+    </div>`
+  });
+}
+
+async function sendPasswordResetEmail(user, tempPassword) {
+  const t = getTransporter();
+  if (!t) throw new Error('SMTP no configurado');
+  const name = user.username || user.name || 'usuario';
+  await t.sendMail({
+    from: `"HuntPrice Perú 🔥" <${process.env.GMAIL_USER || db.getConfig('gmail_user')}>`,
+    to: user.email,
+    subject: '🔑 Restablecimiento de contraseña - HuntPrice Perú',
+    html: `<div style="font-family:Inter,Arial,sans-serif;background:#0d0d0d;color:#fff;padding:32px;border-radius:14px;max-width:520px;margin:auto">
+      <div style="font-size:48px;text-align:center;margin-bottom:12px">🔑</div>
+      <h2 style="color:#FF6600;text-align:center;margin:0 0 8px">Restablecimiento de contraseña</h2>
+      <p style="color:#ccc;font-size:14px;margin:0 0 20px">Hola <strong>${escStr(name)}</strong>, el administrador ha restablecido tu contraseña de acceso.</p>
+      <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:20px;text-align:center;margin-bottom:20px">
+        <p style="color:#888;font-size:12px;margin:0 0 8px">Tu contraseña temporal es:</p>
+        <p style="color:#FF6600;font-size:28px;font-weight:800;font-family:monospace;letter-spacing:3px;margin:0">${escStr(tempPassword)}</p>
+      </div>
+      <p style="color:#aaa;font-size:13px;margin:0 0 20px;text-align:center">Por seguridad, cámbiala inmediatamente desde tu perfil.</p>
+      <a href="https://huntprice.pe" style="display:block;background:#FF6600;color:#fff;text-align:center;padding:13px;border-radius:9px;text-decoration:none;font-weight:700;font-size:15px">Ingresar ahora →</a>
+      <p style="color:#555;font-size:11px;text-align:center;margin-top:20px">HuntPrice Perú · Monitor automático de precios</p>
+    </div>`
+  });
+}
+
+module.exports = { notifyUsers, sendLastChance, testEmail, sendAlertConfirmation, sendOfferEmail, resetTransporter, sendWelcomeEmail, sendGoodbyeEmail, sendReactivationEmail, sendPasswordResetEmail };

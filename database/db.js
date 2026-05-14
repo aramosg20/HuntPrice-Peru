@@ -126,10 +126,31 @@ function initSchema() {
     // auth columns (users)
     "ALTER TABLE users ADD COLUMN username TEXT",
     "ALTER TABLE users ADD COLUMN password_hash TEXT",
-    "ALTER TABLE users ADD COLUMN phone TEXT"
+    "ALTER TABLE users ADD COLUMN phone TEXT",
+    // audit / lifecycle columns (users)
+    "ALTER TABLE users ADD COLUMN public_id TEXT",
+    "ALTER TABLE users ADD COLUMN fecha_afiliacion TEXT",
+    "ALTER TABLE users ADD COLUMN fecha_modificacion TEXT",
+    "ALTER TABLE users ADD COLUMN fecha_baja TEXT",
+    "ALTER TABLE users ADD COLUMN baja_definitiva INTEGER DEFAULT 0",
+    "CREATE INDEX IF NOT EXISTS idx_users_public_id ON users(public_id)"
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* ya existe */ }
+  }
+
+  // Backfill audit dates
+  db.exec(`
+    UPDATE users SET fecha_afiliacion = created_at   WHERE fecha_afiliacion    IS NULL;
+    UPDATE users SET fecha_modificacion = created_at WHERE fecha_modificacion IS NULL;
+  `);
+  // Generate public_id for existing users that don't have one
+  const _withoutPid = db.prepare('SELECT id FROM users WHERE public_id IS NULL').all();
+  if (_withoutPid.length > 0) {
+    const _pidStmt = db.prepare('UPDATE users SET public_id = ? WHERE id = ?');
+    for (const _row of _withoutPid) {
+      _pidStmt.run(require('crypto').randomUUID(), _row.id);
+    }
   }
 
   // Backfill: existing rows get first_seen_at = created_at, last_seen_at = updated_at
@@ -371,11 +392,12 @@ function getUserAlerts(userId) {
 
 function createAuthUser({ username, email, password_hash, phone }) {
   const d = getDb();
+  const publicId = require('crypto').randomUUID();
   try {
     const result = d.prepare(
-      `INSERT INTO users (name, username, email, password_hash, phone, active)
-       VALUES (?,?,?,?,?,1)`
-    ).run(username.trim(), username.trim(), email, password_hash, phone || null);
+      `INSERT INTO users (name, username, email, password_hash, phone, active, public_id, fecha_afiliacion, fecha_modificacion)
+       VALUES (?,?,?,?,?,1,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`
+    ).run(username.trim(), username.trim(), email, password_hash, phone || null, publicId);
     return result.lastInsertRowid;
   } catch (e) {
     if (e.message.includes('UNIQUE')) throw new Error('Email ya registrado');
@@ -398,6 +420,60 @@ function isPhoneTaken(phone) {
 function softDeleteUser(id) {
   getDb().prepare(
     'UPDATE users SET active = 0, password_hash = NULL WHERE id = ?'
+  ).run(id);
+}
+
+function findUserByPhoneAny(phone) {
+  return getDb().prepare('SELECT * FROM users WHERE phone = ?').get(phone) || null;
+}
+
+function reactivateUser(id, data) {
+  const d = getDb();
+  d.prepare(`
+    UPDATE users SET
+      username = ?, email = ?, phone = ?, password_hash = ?,
+      active = 1, fecha_modificacion = CURRENT_TIMESTAMP,
+      fecha_baja = NULL, baja_definitiva = 0
+    WHERE id = ?
+  `).run(data.username, data.email, data.phone, data.password_hash, id);
+  return d.prepare('SELECT * FROM users WHERE id = ?').get(id);
+}
+
+function updateAuthUserProfile(id, data) {
+  const d = getDb();
+  const fields = [];
+  const vals   = [];
+  if (data.username      !== undefined) { fields.push('username = ?');      vals.push(data.username); }
+  if (data.email         !== undefined) { fields.push('email = ?');          vals.push(data.email); }
+  if (data.phone         !== undefined) { fields.push('phone = ?');          vals.push(data.phone); }
+  if (data.password_hash !== undefined) { fields.push('password_hash = ?'); vals.push(data.password_hash); }
+  fields.push('fecha_modificacion = CURRENT_TIMESTAMP');
+  vals.push(id);
+  d.prepare(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`).run(...vals);
+  return d.prepare('SELECT * FROM users WHERE id = ?').get(id);
+}
+
+function adminDeactivateUser(id) {
+  getDb().prepare(
+    'UPDATE users SET active = 0, fecha_baja = CURRENT_TIMESTAMP WHERE id = ?'
+  ).run(id);
+}
+
+function adminPermanentBanUser(id) {
+  getDb().prepare(
+    'UPDATE users SET active = 0, baja_definitiva = 1, fecha_baja = CURRENT_TIMESTAMP WHERE id = ?'
+  ).run(id);
+}
+
+function adminResetPasswordHash(id, hash) {
+  getDb().prepare(
+    'UPDATE users SET password_hash = ?, fecha_modificacion = CURRENT_TIMESTAMP WHERE id = ?'
+  ).run(hash, id);
+}
+
+function adminActivateUser(id) {
+  getDb().prepare(
+    'UPDATE users SET active = 1, fecha_baja = NULL WHERE id = ?'
   ).run(id);
 }
 
@@ -621,5 +697,7 @@ module.exports = {
   purgeExpiredOffers, getTopExclusivos,
   // auth
   createAuthUser, getUserByEmail, getUserById, isPhoneTaken, softDeleteUser,
-  updateAuthUserPreferences
+  updateAuthUserPreferences,
+  findUserByPhoneAny, reactivateUser, updateAuthUserProfile,
+  adminDeactivateUser, adminPermanentBanUser, adminResetPasswordHash, adminActivateUser
 };

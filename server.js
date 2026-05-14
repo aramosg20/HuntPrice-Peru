@@ -66,9 +66,11 @@ const bcrypt = require('bcryptjs');
 const jwt    = require('jsonwebtoken');
 const scraper = require('./scraper/index');
 const { notifyUsers, testEmail, resetTransporter, sendAlertConfirmation, sendOfferEmail,
-        sendWelcomeEmail, sendGoodbyeEmail } = require('./notifications/email');
+        sendWelcomeEmail, sendGoodbyeEmail,
+        sendReactivationEmail, sendPasswordResetEmail } = require('./notifications/email');
 const { handleIncomingMessage, testWhatsApp, resetClient, notifyWhatsApp,
-        sendWelcomeWhatsApp, sendGoodbyeWhatsApp } = require('./notifications/whatsapp');
+        sendWelcomeWhatsApp, sendGoodbyeWhatsApp,
+        sendReactivationWhatsApp } = require('./notifications/whatsapp');
 const https = require('https');
 
 function getJwtSecret() {
@@ -107,6 +109,15 @@ async function sendAuthGoodbye(user) {
   }
   if (user.phone) {
     try { await sendGoodbyeWhatsApp(user); } catch (e) { console.warn('[Auth] Goodbye WA:', e.message); }
+  }
+}
+
+async function sendReactivationNotifications(user) {
+  if (user.email) {
+    try { await sendReactivationEmail(user); } catch (e) { console.warn('[Auth] Reactivation email:', e.message); }
+  }
+  if (user.phone) {
+    try { await sendReactivationWhatsApp(user); } catch (e) { console.warn('[Auth] Reactivation WA:', e.message); }
   }
 }
 
@@ -753,21 +764,49 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, email, confirm_email, password, confirm_password, phone } = req.body;
 
-    if (!username?.trim())          return res.status(400).json({ ok: false, error: 'Nombre de usuario requerido' });
-    if (!email?.trim())             return res.status(400).json({ ok: false, error: 'Correo requerido' });
-    if (email !== confirm_email)    return res.status(400).json({ ok: false, error: 'Los correos no coinciden' });
+    if (!username?.trim())       return res.status(400).json({ ok: false, error: 'Nombre de usuario requerido' });
+    if (!email?.trim())          return res.status(400).json({ ok: false, error: 'Correo requerido' });
+    if (email !== confirm_email) return res.status(400).json({ ok: false, error: 'Los correos no coinciden' });
     if (!password || password.length < 8)
-                                    return res.status(400).json({ ok: false, error: 'La contraseña debe tener al menos 8 caracteres' });
+                                 return res.status(400).json({ ok: false, error: 'La contraseña debe tener al menos 8 caracteres' });
     if (password !== confirm_password)
-                                    return res.status(400).json({ ok: false, error: 'Las contraseñas no coinciden' });
+                                 return res.status(400).json({ ok: false, error: 'Las contraseñas no coinciden' });
     if (!phone || !/^\d{9}$/.test(phone))
-                                    return res.status(400).json({ ok: false, error: 'El celular debe tener exactamente 9 dígitos' });
+                                 return res.status(400).json({ ok: false, error: 'El celular debe tener exactamente 9 dígitos' });
 
     const emailNorm = email.toLowerCase().trim();
-    if (db.getUserByEmail(emailNorm))
+
+    // Check by email
+    const byEmail = db.getUserByEmail(emailNorm);
+    if (byEmail) {
+      if (byEmail.baja_definitiva) {
+        return res.status(403).json({ ok: false, error: 'Esta cuenta ha sido bloqueada permanentemente y no puede reactivarse.' });
+      }
+      if (!byEmail.active) {
+        return res.status(409).json({
+          ok: false, code: 'inactive_account',
+          existingUser: { id: byEmail.id, username: byEmail.username || byEmail.name },
+          matchedBy: 'email'
+        });
+      }
       return res.status(409).json({ ok: false, field: 'email', error: 'Este correo ya está registrado. Intenta iniciar sesión.' });
-    if (db.isPhoneTaken(phone))
+    }
+
+    // Check by phone
+    const byPhone = db.findUserByPhoneAny(phone);
+    if (byPhone) {
+      if (byPhone.baja_definitiva) {
+        return res.status(403).json({ ok: false, error: 'Este número ha sido bloqueado permanentemente.' });
+      }
+      if (!byPhone.active) {
+        return res.status(409).json({
+          ok: false, code: 'inactive_account',
+          existingUser: { id: byPhone.id, username: byPhone.username || byPhone.name },
+          matchedBy: 'phone'
+        });
+      }
       return res.status(409).json({ ok: false, field: 'phone', error: 'Este número de celular ya está registrado.' });
+    }
 
     const password_hash = await bcrypt.hash(password, 10);
     const userId = db.createAuthUser({ username: username.trim(), email: emailNorm, password_hash, phone });
@@ -836,6 +875,140 @@ app.delete('/api/auth/account', requireAuth, async (req, res) => {
     res.json({ ok: true, message: '¡Hasta pronto! Tu cuenta ha sido dada de baja.' });
   } catch (e) {
     console.error('[Auth] Delete account:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/auth/reactivate', async (req, res) => {
+  try {
+    const { userId, choice, username, email, phone, password } = req.body;
+    if (!userId || !choice) return res.status(400).json({ ok: false, error: 'Datos incompletos' });
+
+    const user = db.getUserById(parseInt(userId));
+    if (!user) return res.status(404).json({ ok: false, error: 'Cuenta no encontrada' });
+    if (user.baja_definitiva) return res.status(403).json({ ok: false, error: 'Esta cuenta no puede reactivarse' });
+    if (user.active) return res.status(409).json({ ok: false, error: 'Esta cuenta ya está activa' });
+
+    let reactivatedUser;
+    if (choice === 'restore') {
+      // Restore original data — keep existing password_hash, username, email, phone
+      reactivatedUser = db.reactivateUser(user.id, {
+        username: user.username || user.name,
+        email:    user.email,
+        phone:    user.phone,
+        password_hash: user.password_hash
+      });
+    } else {
+      // Use new data supplied in this registration attempt
+      if (!username?.trim() || !email?.trim() || !password || !phone)
+        return res.status(400).json({ ok: false, error: 'Completa todos los campos para continuar con nuevos datos' });
+      if (!/^\d{9}$/.test(phone))
+        return res.status(400).json({ ok: false, error: 'El celular debe tener exactamente 9 dígitos' });
+      if (password.length < 8)
+        return res.status(400).json({ ok: false, error: 'La contraseña debe tener al menos 8 caracteres' });
+
+      const emailNorm = email.toLowerCase().trim();
+      // Ensure new email/phone are not taken by another active account
+      const emailTaken = db.getUserByEmail(emailNorm);
+      if (emailTaken && emailTaken.id !== user.id)
+        return res.status(409).json({ ok: false, field: 'email', error: 'Este correo ya está en uso por otra cuenta' });
+      const phoneTaken = db.findUserByPhoneAny(phone);
+      if (phoneTaken && phoneTaken.id !== user.id)
+        return res.status(409).json({ ok: false, field: 'phone', error: 'Este número ya está en uso por otra cuenta' });
+
+      const password_hash = await bcrypt.hash(password, 10);
+      reactivatedUser = db.reactivateUser(user.id, {
+        username: username.trim(),
+        email:    emailNorm,
+        phone,
+        password_hash
+      });
+    }
+
+    const token = jwt.sign(
+      { id: reactivatedUser.id, email: reactivatedUser.email, username: reactivatedUser.username },
+      getJwtSecret(),
+      { expiresIn: '30d' }
+    );
+
+    sendReactivationNotifications(reactivatedUser).catch(() => {});
+
+    res.json({
+      ok: true, token,
+      user: { id: reactivatedUser.id, username: reactivatedUser.username, email: reactivatedUser.email, phone: reactivatedUser.phone },
+      message: `¡Bienvenido de vuelta, ${reactivatedUser.username || reactivatedUser.name}!`
+    });
+  } catch (e) {
+    console.error('[Auth] Reactivate:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.put('/api/auth/profile', requireAuth, async (req, res) => {
+  try {
+    const { username, email, phone, password, current_password } = req.body;
+    const user = db.getUserById(req.authUser.id);
+    if (!user || !user.active) return res.status(401).json({ ok: false, error: 'Sesión inválida' });
+
+    const updates = {};
+
+    if (username !== undefined) {
+      if (!username.trim()) return res.status(400).json({ ok: false, error: 'El nombre de usuario no puede estar vacío' });
+      updates.username = username.trim();
+    }
+
+    if (email !== undefined) {
+      const emailNorm = email.toLowerCase().trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNorm))
+        return res.status(400).json({ ok: false, error: 'Correo inválido' });
+      if (emailNorm !== user.email) {
+        const taken = db.getUserByEmail(emailNorm);
+        if (taken && taken.id !== user.id)
+          return res.status(409).json({ ok: false, field: 'email', error: 'Este correo ya está en uso' });
+      }
+      updates.email = emailNorm;
+    }
+
+    if (phone !== undefined) {
+      if (phone && !/^\d{9}$/.test(phone))
+        return res.status(400).json({ ok: false, error: 'El celular debe tener exactamente 9 dígitos' });
+      if (phone && phone !== user.phone) {
+        const taken = db.findUserByPhoneAny(phone);
+        if (taken && taken.id !== user.id)
+          return res.status(409).json({ ok: false, field: 'phone', error: 'Este número ya está en uso' });
+      }
+      updates.phone = phone || null;
+    }
+
+    if (password !== undefined) {
+      if (!current_password)
+        return res.status(400).json({ ok: false, error: 'Ingresa tu contraseña actual para cambiarla' });
+      if (!user.password_hash)
+        return res.status(400).json({ ok: false, error: 'Esta cuenta no tiene contraseña configurada' });
+      const valid = await bcrypt.compare(current_password, user.password_hash);
+      if (!valid) return res.status(401).json({ ok: false, error: 'Contraseña actual incorrecta' });
+      if (password.length < 8)
+        return res.status(400).json({ ok: false, error: 'La nueva contraseña debe tener al menos 8 caracteres' });
+      updates.password_hash = await bcrypt.hash(password, 10);
+    }
+
+    if (Object.keys(updates).length === 0)
+      return res.status(400).json({ ok: false, error: 'No hay cambios que guardar' });
+
+    const updated = db.updateAuthUserProfile(user.id, updates);
+    const token = jwt.sign(
+      { id: updated.id, email: updated.email, username: updated.username },
+      getJwtSecret(),
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      ok: true, token,
+      user: { id: updated.id, username: updated.username, email: updated.email, phone: updated.phone },
+      message: 'Perfil actualizado correctamente'
+    });
+  } catch (e) {
+    console.error('[Auth] Update profile:', e.message);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
@@ -935,7 +1108,51 @@ app.get('/api/admin/users', requireAdmin, (req, res) => {
 
 app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
   try {
-    db.getDb().prepare('UPDATE users SET active=0 WHERE id=?').run(parseInt(req.params.id));
+    db.adminDeactivateUser(parseInt(req.params.id));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/admin/users/:id/reset-password', requireAdmin, async (req, res) => {
+  try {
+    const user = db.getUserById(parseInt(req.params.id));
+    if (!user) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    if (!user.email) return res.status(400).json({ ok: false, error: 'El usuario no tiene email registrado' });
+
+    const tempPassword = require('crypto').randomBytes(5).toString('hex');
+    const hash = await bcrypt.hash(tempPassword, 10);
+    db.adminResetPasswordHash(user.id, hash);
+
+    try {
+      await sendPasswordResetEmail(user, tempPassword);
+    } catch (e) {
+      console.warn('[Admin] Password reset email failed:', e.message);
+      return res.status(500).json({ ok: false, error: 'Contraseña restablecida pero no se pudo enviar el email: ' + e.message });
+    }
+
+    res.json({ ok: true, message: `Contraseña restablecida y enviada a ${user.email}` });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.put('/api/admin/users/:id/activate', requireAdmin, (req, res) => {
+  try {
+    db.adminActivateUser(parseInt(req.params.id));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/admin/users/:id/permanent-ban', requireAdmin, (req, res) => {
+  try {
+    const user = db.getUserById(parseInt(req.params.id));
+    if (!user) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    if (user.baja_definitiva) return res.status(400).json({ ok: false, error: 'El usuario ya tiene baja definitiva' });
+    db.adminPermanentBanUser(user.id);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });

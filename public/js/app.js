@@ -1212,6 +1212,7 @@ function updateProfileNavBtn() {
             <div class="user-dropdown-email">${escHtml(u.email)}</div>
             ${u.phone ? `<div class="user-dropdown-phone">🇵🇪 +51 ${escHtml(u.phone)}</div>` : ''}
           </div>
+          <button class="user-dropdown-item" onclick="openEditProfile()">✏️ Editar información</button>
           <button class="user-dropdown-item" onclick="doLogout()">🚪 Cerrar sesión</button>
           <button class="user-dropdown-item danger" onclick="confirmDeleteAccount()">🗑️ Darse de baja</button>
         </div>
@@ -1297,27 +1298,38 @@ async function doLogin(event) {
   }
 }
 
+let pendingReactivation = { existingUser: null, newData: null };
+
 async function doRegister(event) {
   event.preventDefault();
   const btn = document.getElementById('registerSubmitBtn');
   btn.disabled = true;
   btn.textContent = 'Creando cuenta...';
   const form = new FormData(event.target);
+  const newData = {
+    username:         form.get('username'),
+    email:            form.get('email'),
+    confirm_email:    form.get('confirm_email'),
+    password:         form.get('password'),
+    confirm_password: form.get('confirm_password'),
+    phone:            form.get('phone')
+  };
   try {
     const res  = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username:         form.get('username'),
-        email:            form.get('email'),
-        confirm_email:    form.get('confirm_email'),
-        password:         form.get('password'),
-        confirm_password: form.get('confirm_password'),
-        phone:            form.get('phone')
-      })
+      body: JSON.stringify(newData)
     });
     const json = await res.json();
-    if (!json.ok) throw new Error(json.error || 'Error al registrar');
+    if (!json.ok) {
+      if (json.code === 'inactive_account') {
+        pendingReactivation = { existingUser: json.existingUser, newData };
+        closeModal('registerModal');
+        showReactivateModal(json.existingUser, newData);
+        return;
+      }
+      throw new Error(json.error || 'Error al registrar');
+    }
     state.authToken = json.token;
     state.authUser  = json.user;
     localStorage.setItem('hp_auth_token', json.token);
@@ -1331,6 +1343,144 @@ async function doRegister(event) {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Crear cuenta gratis';
+  }
+}
+
+function showReactivateModal(existingUser, newData) {
+  const body = document.getElementById('reactivateModalBody');
+  if (!body) return;
+  const oldName = escHtml(existingUser.username || '');
+  const newName = escHtml(newData.username?.trim() || '');
+  const nameChanged = oldName && newName && oldName.toLowerCase() !== newName.toLowerCase();
+  const nameChangeNote = nameChanged
+    ? `<p style="font-size:13px;color:var(--text2);background:var(--bg3);border-radius:10px;padding:12px 14px;line-height:1.6;margin:12px 0">
+         Hola <strong>${newName}</strong>, vemos que has cambiado tu nombre ya que anteriormente eras <strong>${oldName}</strong>.
+         ¿Deseas continuar con el nuevo nombre o recuperar tu cuenta anterior?
+       </p>`
+    : `<p style="font-size:13px;color:var(--text2);margin:12px 0">
+         Encontramos una cuenta inactiva asociada a tu correo o celular. ¿Deseas reactivarla?
+       </p>`;
+
+  body.innerHTML = `
+    ${nameChangeNote}
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px">
+      <button class="btn-primary" onclick="doReactivate('new_data')" id="reactivateNewBtn">
+        ✅ Sí, continuar con nuevos datos
+      </button>
+      <button class="btn-secondary" onclick="doReactivate('restore')" id="reactivateRestoreBtn" style="width:100%">
+        🔄 Reactivar cuenta anterior (${escHtml(oldName || 'original')})
+      </button>
+      <button onclick="closeModal('reactivateModal')"
+        style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:4px;text-decoration:underline">
+        Cancelar
+      </button>
+    </div>`;
+  openModal('reactivateModal');
+}
+
+async function doReactivate(choice) {
+  const { existingUser, newData } = pendingReactivation;
+  if (!existingUser) return;
+  const btn = document.getElementById(choice === 'new_data' ? 'reactivateNewBtn' : 'reactivateRestoreBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Procesando...'; }
+  try {
+    const payload = { userId: existingUser.id, choice };
+    if (choice === 'new_data') {
+      Object.assign(payload, {
+        username: newData.username,
+        email:    newData.email,
+        phone:    newData.phone,
+        password: newData.password
+      });
+    }
+    const res  = await fetch('/api/auth/reactivate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Error al reactivar');
+    state.authToken = json.token;
+    state.authUser  = json.user;
+    localStorage.setItem('hp_auth_token', json.token);
+    localStorage.setItem('hp_auth_user',  JSON.stringify(json.user));
+    pendingReactivation = { existingUser: null, newData: null };
+    closeModal('reactivateModal');
+    updateProfileNavBtn();
+    showToast('🎉', json.message || '¡Bienvenido de vuelta!', 'Tu cuenta ha sido reactivada', 'success');
+    resetChatForAuth();
+  } catch (e) {
+    showToast('❌', 'Error al reactivar', e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = btn.id === 'reactivateNewBtn' ? '✅ Sí, continuar con nuevos datos' : '🔄 Reactivar cuenta anterior'; }
+  }
+}
+
+function openEditProfile() {
+  document.getElementById('userDropdown')?.classList.remove('open');
+  const u = state.authUser;
+  if (!u) return;
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  setVal('editUsername', u.username);
+  setVal('editEmail',    u.email);
+  setVal('editPhone',    u.phone || '');
+  const pwSection = document.getElementById('editPwSection');
+  const pwBtn     = document.getElementById('togglePwSection');
+  if (pwSection) pwSection.style.display = 'none';
+  if (pwBtn) pwBtn.textContent = '🔑 Cambiar contraseña ▾';
+  const pwInputs = ['editCurrentPw', 'editNewPw'];
+  pwInputs.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  openModal('editProfileModal');
+}
+
+function toggleEditPwSection() {
+  const section = document.getElementById('editPwSection');
+  const btn     = document.getElementById('togglePwSection');
+  if (!section) return;
+  const open = section.style.display !== 'none';
+  section.style.display = open ? 'none' : 'block';
+  if (btn) btn.textContent = open ? '🔑 Cambiar contraseña ▾' : '🔑 Cambiar contraseña ▴';
+}
+
+async function doEditProfile(event) {
+  event.preventDefault();
+  const btn = document.getElementById('editProfileSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+  const form  = new FormData(event.target);
+  const pwOpen = document.getElementById('editPwSection')?.style.display !== 'none';
+  const payload = {
+    username: form.get('username')?.trim() || undefined,
+    email:    form.get('email')?.trim()    || undefined,
+    phone:    form.get('phone')?.trim()    || undefined
+  };
+  if (pwOpen) {
+    const current = form.get('current_password');
+    const newPw   = form.get('password');
+    if (current || newPw) {
+      payload.current_password = current;
+      payload.password         = newPw;
+    }
+  }
+  try {
+    const res  = await fetch('/api/auth/profile', {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.authToken}` },
+      body:    JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Error al guardar');
+    state.authToken = json.token;
+    state.authUser  = json.user;
+    localStorage.setItem('hp_auth_token', json.token);
+    localStorage.setItem('hp_auth_user',  JSON.stringify(json.user));
+    closeModal('editProfileModal');
+    updateProfileNavBtn();
+    showToast('✅', 'Perfil actualizado', json.message || 'Tus datos han sido guardados', 'success');
+  } catch (e) {
+    showToast('❌', 'Error al guardar', e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar cambios';
   }
 }
 
@@ -1685,5 +1835,11 @@ window.handleOthersCategoryInput = handleOthersCategoryInput;
 window.selectSuggestedCategory = selectSuggestedCategory;
 window.addCustomCategory = addCustomCategory;
 window.removeCustomCategory = removeCustomCategory;
+// reactivation & edit profile
+window.showReactivateModal = showReactivateModal;
+window.doReactivate = doReactivate;
+window.openEditProfile = openEditProfile;
+window.toggleEditPwSection = toggleEditPwSection;
+window.doEditProfile = doEditProfile;
 // share
 window.shareProduct = shareProduct;
