@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual de Usuario – HuntPrice Perú</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    /* ─── Manual-specific styles ─────────────────────────────────── */
+    .manual-body { max-width: 860px; margin: 0 auto; padding: 0 20px 80px; }
+
+    /* TOC sidebar */
+    .manual-layout { display: grid; grid-template-columns: 240px 1fr; gap: 40px; align-items: start; max-width: 1160px; margin: 0 auto; padding: 32px 20px 80px; }
+    @media (max-width: 860px) { .manual-layout { grid-template-columns: 1fr; } .toc { display: none; } }
+
+    .toc {
+      position: sticky; top: 76px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px;
+    }
+    .toc-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); margin-bottom: 14px; }
+    .toc-list { list-style: none; }
+    .toc-list li { margin-bottom: 2px; }
+    .toc-list a { display: block; font-size: 13px; color: var(--text2); padding: 5px 8px; border-radius: 6px; text-decoration: none; transition: .15s; border-left: 2px solid transparent; }
+    .toc-list a:hover { color: var(--text); background: var(--bg3); }
+    .toc-list a.active { color: var(--orange); border-left-color: var(--orange); background: var(--orange-glow); }
+    .toc-sub { padding-left: 14px; }
+    .toc-sub a { font-size: 12px; color: var(--text3); }
+
+    /* Sections */
+    .manual-section { margin-bottom: 56px; scroll-margin-top: 80px; }
+    .section-header {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+    }
+    .section-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--orange), #CC4400);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; flex-shrink: 0;
+    }
+    .section-icon.green { background: linear-gradient(135deg, #00AA55, #007733); }
+    .section-icon.blue  { background: linear-gradient(135deg, #0088CC, #005588); }
+    .section-icon.purple { background: linear-gradient(135deg, #8833CC, #5511AA); }
+    .section-icon.red  { background: linear-gradient(135deg, #CC2222, #991111); }
+    .section-icon.yellow { background: linear-gradient(135deg, #CC9900, #996600); }
+    .section-icon.teal  { background: linear-gradient(135deg, #009988, #006655); }
+
+    .section-header h2 { font-size: 22px; font-weight: 800; margin: 0; }
+    .section-header p  { font-size: 13px; color: var(--text2); margin: 2px 0 0; }
+
+    /* Steps */
+    .steps { display: flex; flex-direction: column; gap: 16px; margin: 20px 0; }
+    .step {
+      display: flex; gap: 14px; align-items: flex-start;
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px;
+    }
+    .step-num {
+      min-width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--orange), #CC4400);
+      color: #fff; font-weight: 900; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-num.green { background: linear-gradient(135deg, #00AA55, #007733); }
+    .step-content h4 { font-size: 14px; font-weight: 700; margin: 0 0 4px; }
+    .step-content p  { font-size: 13px; color: var(--text2); margin: 0; line-height: 1.5; }
+
+    /* Cards grid */
+    .cards-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0; }
+    @media (max-width: 600px) { .cards-2 { grid-template-columns: 1fr; } }
+    .info-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px;
+    }
+    .info-card h4 { font-size: 14px; font-weight: 700; margin: 0 0 8px; }
+    .info-card p  { font-size: 13px; color: var(--text2); margin: 0; line-height: 1.5; }
+    .info-card.highlight { border-color: rgba(255,102,0,.4); background: rgba(255,102,0,.05); }
+    .info-card.green { border-color: rgba(0,204,102,.35); background: rgba(0,204,102,.05); }
+
+    /* Product anatomy diagram */
+    .anatomy-box {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 20px; margin: 20px 0; position: relative;
+    }
+    .anatomy-card-mock {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+      overflow: hidden; max-width: 260px; margin: 0 auto;
+    }
+    .mock-img { height: 120px; background: linear-gradient(135deg, #222, #2a2a2a); position: relative; display: flex; align-items: center; justify-content: center; font-size: 36px; }
+    .mock-badge { position: absolute; top: 8px; left: 8px; background: #FF3333; color:#fff; font-size:11px; font-weight:800; padding:3px 8px; border-radius:20px; }
+    .mock-store { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,.7); color:#fff; font-size:9px; font-weight:700; padding:2px 7px; border-radius:5px; text-transform:uppercase; }
+    .mock-body { padding: 12px; }
+    .mock-cat { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+    .mock-name { font-size:12px; font-weight:600; margin-bottom:8px; color:var(--text); }
+    .mock-orig { font-size:10px; color:var(--text3); text-decoration:line-through; }
+    .mock-price { font-size:20px; font-weight:900; color:var(--green-bright); }
+    .mock-meta { display:flex; justify-content:space-between; font-size:9px; color:var(--text3); margin:6px 0; }
+    .mock-actions { display:flex; gap:6px; }
+    .mock-btn { flex:1; background:linear-gradient(135deg,#FF6600,#CC4400); color:#fff; border:none; padding:7px; border-radius:6px; font-size:10px; font-weight:700; text-align:center; }
+    .mock-alert-btn { width:28px; height:28px; background:var(--bg3); border:1px solid var(--border); border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; }
+
+    /* Annotation rows */
+    .annotation { display:flex; align-items:flex-start; gap:10px; margin:8px 0; font-size:13px; color:var(--text2); }
+    .ann-tag { font-size:10px; font-weight:700; background:var(--orange); color:#fff; padding:2px 7px; border-radius:4px; white-space:nowrap; flex-shrink:0; }
+    .ann-tag.g { background: var(--green); color:#000; }
+    .ann-tag.b { background: #0088CC; }
+    .ann-tag.r { background: var(--red); }
+    .ann-tag.y { background: var(--yellow); color:#000; }
+
+    /* Callout boxes */
+    .callout {
+      padding: 14px 18px; border-radius: 10px; margin: 20px 0;
+      display: flex; gap: 12px; align-items: flex-start;
+      font-size: 13px; line-height: 1.6;
+    }
+    .callout.tip  { background: rgba(0,204,102,.08); border: 1px solid rgba(0,204,102,.3); }
+    .callout.warn { background: rgba(255,184,0,.08); border: 1px solid rgba(255,184,0,.3); }
+    .callout.info { background: rgba(0,136,204,.08); border: 1px solid rgba(0,136,204,.3); }
+    .callout-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+    .callout p { margin: 0; }
+    .callout strong { color: var(--text); }
+
+    /* Badge pills */
+    .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    }
+    .badge.red { background: rgba(255,51,51,.15); color: var(--red); border: 1px solid rgba(255,51,51,.3); }
+    .badge.orange { background: var(--orange-glow); color: var(--orange); border: 1px solid rgba(255,102,0,.3); }
+    .badge.green { background: rgba(0,204,102,.12); color: var(--green); border: 1px solid rgba(0,204,102,.3); }
+    .badge.yellow { background: rgba(255,184,0,.12); color: var(--yellow); border: 1px solid rgba(255,184,0,.3); }
+
+    /* Table */
+    .manual-table { width:100%; border-collapse:collapse; font-size:13px; margin:16px 0; }
+    .manual-table th { background:var(--bg3); padding:10px 14px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); }
+    .manual-table td { padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+    .manual-table td:first-child { font-weight:600; white-space:nowrap; }
+    .manual-table tr:hover td { background:var(--bg3); }
+
+    /* Code / shortcut */
+    kbd { background:var(--bg3); border:1px solid var(--border); border-bottom:2px solid var(--border); border-radius:5px; padding:2px 7px; font-size:12px; font-family:monospace; color:var(--text); }
+    code { background:var(--bg3); padding:1px 6px; border-radius:4px; font-size:12px; font-family:monospace; color:var(--orange); }
+
+    /* Score bar */
+    .score-demo { display:flex; flex-direction:column; gap:8px; margin:12px 0; }
+    .score-row { display:flex; align-items:center; gap:10px; }
+    .score-label { font-size:12px; color:var(--text2); width:180px; flex-shrink:0; }
+    .score-bar { flex:1; height:8px; background:var(--bg3); border-radius:4px; overflow:hidden; }
+    .score-fill { height:100%; border-radius:4px; background:var(--orange); }
+    .score-num { font-size:12px; font-weight:700; color:var(--orange); width:30px; text-align:right; }
+
+    /* Notification preview */
+    .notif-preview {
+      background: #0a1a0a; border: 1px solid rgba(0,204,102,.3); border-radius: 12px;
+      padding: 18px; font-family: monospace; font-size: 13px; line-height: 1.8;
+      color: #ccc; margin: 16px 0;
+    }
+    .notif-preview .bold { font-weight: 700; color: #fff; }
+    .notif-preview .green { color: #00FF88; }
+    .notif-preview .red   { color: #FF6666; text-decoration: line-through; }
+    .notif-preview .orange { color: #FF9944; }
+    .notif-preview .muted { color: #666; font-size: 11px; }
+
+    /* WhatsApp bubble */
+    .wa-bubble {
+      background: #075e54; border-radius: 12px 12px 12px 0;
+      padding: 14px 18px; max-width: 320px; font-size: 13px;
+      line-height: 1.7; color: #e9fbe9; margin: 16px 0;
+    }
+    .wa-bubble .wa-header { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+    .wa-bubble .wa-price-old { text-decoration: line-through; color: #aaa; }
+    .wa-bubble .wa-time { font-size: 11px; color: #8cc9c0; text-align: right; margin-top: 8px; }
+
+    /* FAQ */
+    .faq-item { margin-bottom: 12px; }
+    .faq-q {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 18px; cursor: pointer; font-size: 14px; font-weight: 600;
+      display: flex; justify-content: space-between; align-items: center;
+      transition: .2s;
+    }
+    .faq-q:hover { border-color: var(--orange); }
+    .faq-a {
+      background: var(--card); border: 1px solid var(--border); border-top: none;
+      border-radius: 0 0 10px 10px; padding: 14px 18px; font-size: 13px;
+      color: var(--text2); line-height: 1.6; display: none;
+    }
+    .faq-item.open .faq-q { border-radius: 10px 10px 0 0; border-color: var(--orange); background: var(--orange-glow); color: var(--orange); }
+    .faq-item.open .faq-a { display: block; }
+
+    /* Progress / indicator */
+    .feature-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+    .feature-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text2); line-height: 1.5; }
+    .feature-list li::before { content: '✓'; color: var(--green); font-weight: 800; flex-shrink: 0; margin-top: 1px; }
+
+    /* Hero del manual */
+    .manual-hero {
+      background: linear-gradient(135deg, #1a0800 0%, #0d0d0d 40%, #001a0a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 48px 20px 40px;
+      text-align: center;
+    }
+    .manual-hero h1 { font-size: clamp(28px,5vw,44px); font-weight: 900; margin-bottom: 12px; }
+    .manual-hero p  { color: var(--text2); font-size: 16px; max-width: 540px; margin: 0 auto 24px; }
+    .manual-meta { display: inline-flex; gap: 20px; flex-wrap: wrap; justify-content: center; font-size: 12px; color: var(--text3); }
+    .manual-meta span { display: flex; align-items: center; gap: 5px; }
+    .version-tag { background: var(--orange-glow); border: 1px solid rgba(255,102,0,.4); color: var(--orange); padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; display: inline-block; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+
+<!-- ─── Navbar ─────────────────────────────────────────────────────────── -->
+<nav class="navbar">
+  <div class="navbar-brand">
+    <div class="logo-icon">🔥</div>
+    Hunt<span>Price</span>&nbsp;Perú
+  </div>
+  <div class="navbar-right">
+    <a href="/" class="btn-icon" title="Dashboard">🏠</a>
+    <a href="/admin" class="btn-icon" title="Admin">⚙️</a>
+  </div>
+</nav>
+
+<!-- ─── Hero ──────────────────────────────────────────────────────────── -->
+<div class="manual-hero">
+  <div class="version-tag">📖 Manual v1.0</div>
+  <h1>Manual de <span style="color:var(--orange)">HuntPrice</span> Perú</h1>
+  <p>Guía completa para sacar el máximo provecho al monitor de ofertas flash de tiendas peruanas.</p>
+  <div class="manual-meta">
+    <span>🏬 6 tiendas monitoreadas</span>
+    <span>⏱ Actualización cada 15 min</span>
+    <span>📱 Compatible móvil/tablet</span>
+    <span>🔔 Alertas por email y WhatsApp</span>
+  </div>
+</div>
+
+<!-- ─── Layout con TOC ─────────────────────────────────────────────────── -->
+<div class="manual-layout">
+
+  <!-- ── Tabla de Contenidos ──────────────────────────────────────────── -->
+  <aside class="toc" id="toc">
+    <div class="toc-title">Contenidos</div>
+    <ul class="toc-list">
+      <li><a href="#intro">1. Introducción</a></li>
+      <li><a href="#dashboard">2. Panel Principal</a>
+        <ul class="toc-sub">
+          <li><a href="#stats-bar">Barra de estadísticas</a></li>
+          <li><a href="#filters">Filtros y búsqueda</a></li>
+          <li><a href="#product-card">Tarjeta de producto</a></li>
+          <li><a href="#sorting">Ordenamiento</a></li>
+        </ul>
+      </li>
+      <li><a href="#product-detail">3. Detalle del Producto</a></li>
+      <li><a href="#alerts">4. Sistema de Alertas</a>
+        <ul class="toc-sub">
+          <li><a href="#quick-alert">Alerta rápida</a></li>
+          <li><a href="#full-subscription">Suscripción completa</a></li>
+        </ul>
+      </li>
+      <li><a href="#notifications">5. Notificaciones</a>
+        <ul class="toc-sub">
+          <li><a href="#email-notif">Email</a></li>
+          <li><a href="#whatsapp-notif">WhatsApp</a></li>
+        </ul>
+      </li>
+      <li><a href="#admin">6. Panel Admin</a>
+        <ul class="toc-sub">
+          <li><a href="#admin-stats">Estadísticas</a></li>
+          <li><a href="#admin-scraper">Scraper</a></li>
+          <li><a href="#admin-users">Usuarios</a></li>
+          <li><a href="#admin-config">Configuración</a></li>
+        </ul>
+      </li>
+      <li><a href="#setup">7. Configuración Inicial</a></li>
+      <li><a href="#pwa">8. Instalar como App</a></li>
+      <li><a href="#scores">9. Score de Urgencia</a></li>
+      <li><a href="#glossary">10. Glosario</a></li>
+      <li><a href="#faq">11. Preguntas Frecuentes</a></li>
+    </ul>
+  </aside>
+
+  <!-- ── Contenido ────────────────────────────────────────────────────── -->
+  <main>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- 1. INTRODUCCIÓN                                                    -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="intro">
+      <div class="section-header">
+        <div class="section-icon">🔥</div>
+        <div>
+          <h2>¿Qué es HuntPrice Perú?</h2>
+          <p>Introducción y visión general del sistema</p>
+        </div>
+      </div>
+
+      <p style="font-size:15px;line-height:1.7;margin-bottom:16px">
+        <strong>HuntPrice Perú</strong> es un monitor automático de precios que escanea las páginas de ofertas de las principales tiendas por departamento del Perú cada 15 minutos y te notifica cuando aparecen descuentos importantes.
+      </p>
+
+      <div class="cards-2">
+        <div class="info-card highlight">
+          <h4>🏬 Tiendas monitoreadas</h4>
+          <p>Falabella · Ripley · Oechsle · Sodimac · Promart · PlazaVea</p>
+        </div>
+        <div class="info-card green">
+          <h4>⚡ ¿Qué detecta?</h4>
+          <p>Descuentos desde 30 % hasta 90 %. Ofertas flash, cyber deals y liquidaciones.</p>
+        </div>
+        <div class="info-card">
+          <h4>🔔 Alertas personalizadas</h4>
+          <p>Recibe notificaciones por email o WhatsApp según tus categorías y presupuesto.</p>
+        </div>
+        <div class="info-card">
+          <h4>📊 Historial de precios</h4>
+          <p>Gráfico de evolución del precio para saber si la oferta es realmente buena.</p>
+        </div>
+      </div>
+
+      <div class="callout tip">
+        <span class="callout-icon">💡</span>
+        <p><strong>Modo Demo activo por defecto.</strong> La primera vez que abres la aplicación verás 25 productos de ejemplo con precios realistas. Para activar el scraping real de las tiendas ve al <a href="#setup">Configuración Inicial</a>.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- 2. PANEL PRINCIPAL                                                 -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="dashboard">
+      <div class="section-header">
+        <div class="section-icon">📊</div>
+        <div>
+          <h2>Panel Principal (Dashboard)</h2>
+          <p>La pantalla principal de ofertas</p>
+        </div>
+      </div>
+
+      <p style="font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:24px">
+        Al ingresar a <code>http://localhost:3000</code> encontrarás el dashboard con todas las ofertas activas. La página se actualiza automáticamente en tiempo real cuando el scraper detecta nuevas ofertas.
+      </p>
+
+      <!-- Barra de navegación -->
+      <h3 id="stats-bar" style="font-size:16px;font-weight:700;margin:0 0 14px;scroll-margin-top:80px">
+        2.1 Barra de Estadísticas en Vivo
+      </h3>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">La parte superior del dashboard muestra el estado del monitor en tiempo real:</p>
+      <table class="manual-table">
+        <thead><tr><th>Indicador</th><th>Qué significa</th></tr></thead>
+        <tbody>
+          <tr><td>📦 Productos</td><td>Total de productos únicos que HuntPrice tiene registrados en su base de datos</td></tr>
+          <tr><td>⚡ Activas ahora</td><td>Ofertas con precio actualizado en la última hora</td></tr>
+          <tr><td>🔥 Mejor descuento</td><td>El porcentaje de descuento más alto detectado en las últimas 24 horas</td></tr>
+          <tr><td>👥 Suscritos</td><td>Número de usuarios que han activado alertas de precio</td></tr>
+          <tr><td>Punto verde "EN VIVO"</td><td>La conexión en tiempo real (SSE) está activa. Nuevas ofertas llegan sin recargar la página</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Filtros -->
+      <h3 id="filters" style="font-size:16px;font-weight:700;margin:28px 0 14px;scroll-margin-top:80px">
+        2.2 Panel de Filtros
+      </h3>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:14px">El panel lateral izquierdo (en móvil aparece arriba) tiene los siguientes controles:</p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">🏬</div>
+          <div class="step-content">
+            <h4>Filtrar por tienda</h4>
+            <p>Toca el nombre de una tienda para ver solo sus ofertas. Toca de nuevo para desactivar el filtro. Puedes seleccionar una sola tienda a la vez.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">🏷️</div>
+          <div class="step-content">
+            <h4>Filtrar por categoría</h4>
+            <p>Las categorías se cargan dinámicamente según los productos disponibles. Ejemplos: Electrónica, Moda, Electrohogar, Herramientas. Toca una para activarla.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">%</div>
+          <div class="step-content">
+            <h4>Descuento mínimo (slider)</h4>
+            <p>Desliza para establecer el porcentaje mínimo que te interesa. Los valores rápidos son 0 %, 30 %, 50 %, 70 % y 90 %. Usa los <strong>Filtros rápidos</strong> al final del panel para aplicar valores comunes con un solo toque.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">S/.</div>
+          <div class="step-content">
+            <h4>Precio máximo</h4>
+            <p>Ingresa el máximo que deseas gastar en soles. Solo se mostrarán productos con precio de oferta por debajo de ese valor. Deja vacío para no aplicar límite.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">✕</div>
+          <div class="step-content">
+            <h4>Limpiar filtros</h4>
+            <p>El botón <strong>"✕ Limpiar filtros"</strong> restablece todos los controles a su estado inicial y muestra todas las ofertas ordenadas por mayor descuento.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Buscador y ordenamiento -->
+      <h3 id="sorting" style="font-size:16px;font-weight:700;margin:28px 0 14px;scroll-margin-top:80px">
+        2.3 Buscador y Ordenamiento
+      </h3>
+      <div class="cards-2">
+        <div class="info-card">
+          <h4>🔍 Búsqueda en tiempo real</h4>
+          <p>Escribe en la caja de búsqueda superior para filtrar por nombre de producto. La búsqueda se ejecuta automáticamente 400 ms después de dejar de escribir (sin necesidad de presionar Enter).</p>
+        </div>
+        <div class="info-card">
+          <h4>↕️ Ordenar por</h4>
+          <p>
+            <strong>Mayor descuento</strong> — de más a menos % off<br>
+            <strong>Precio más bajo</strong> — más económico primero<br>
+            <strong>Más reciente</strong> — detectado hace menos tiempo<br>
+            <strong>Más urgente</strong> — según score 1–10
+          </p>
+        </div>
+      </div>
+
+      <!-- Tarjeta de producto -->
+      <h3 id="product-card" style="font-size:16px;font-weight:700;margin:28px 0 16px;scroll-margin-top:80px">
+        2.4 Anatomía de una Tarjeta de Producto
+      </h3>
+
+      <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start">
+        <!-- Mock card -->
+        <div style="flex-shrink:0">
+          <div class="anatomy-card-mock">
+            <div class="mock-img">
+              📺
+              <div class="mock-badge">-65%</div>
+              <div class="mock-store">Falabella</div>
+              <div style="position:absolute;bottom:8px;left:8px;background:linear-gradient(135deg,#FFB800,#FF8800);color:#000;font-size:8px;font-weight:800;padding:2px 6px;border-radius:3px;text-transform:uppercase;">🏆 Mín. Histórico</div>
+              <div style="position:absolute;bottom:8px;right:8px;background:var(--green);color:#000;font-size:8px;font-weight:800;padding:2px 6px;border-radius:3px;animation:blink 1.5s infinite">NUEVO</div>
+            </div>
+            <div class="mock-body">
+              <div class="mock-cat">Electrónica</div>
+              <div class="mock-name">Samsung QLED 65" 4K Smart TV</div>
+              <div class="mock-orig">Antes: S/. 5,499.00</div>
+              <div class="mock-price">S/. 1,924<span style="font-size:12px;font-weight:400">.00</span></div>
+              <div class="mock-meta">
+                <span>🔥 9/10</span>
+                <span>hace 3m</span>
+                <span>💰 S/.3,575</span>
+              </div>
+              <div class="mock-actions">
+                <div class="mock-btn">🛒 VER OFERTA</div>
+                <div class="mock-alert-btn">🔕</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Annotations -->
+        <div style="flex:1;min-width:220px">
+          <div class="annotation"><span class="ann-tag r">-65%</span>Porcentaje de descuento. Rojo normal hasta 69 %, degradado rojo-naranja desde 70 % (MEGA).</div>
+          <div class="annotation"><span class="ann-tag" style="background:#555">TIENDA</span>Badge de la tienda en la esquina superior derecha de la imagen.</div>
+          <div class="annotation"><span class="ann-tag y">🏆 MÍN.</span>Aparece cuando el precio actual es el <strong>mínimo histórico</strong> registrado para ese producto.</div>
+          <div class="annotation"><span class="ann-tag g">NUEVO</span>Parpadea en verde cuando la oferta fue detectada hace <strong>menos de 10 minutos</strong>.</div>
+          <div class="annotation"><span class="ann-tag" style="background:#888">CATEGORÍA</span>Categoría del producto: Electrónica, Moda, Hogar, etc.</div>
+          <div class="annotation"><span class="ann-tag" style="background:#555">PRECIO</span>Precio tachado = precio original. Precio grande verde = precio actual de oferta.</div>
+          <div class="annotation"><span class="ann-tag b">META</span><strong>🔥 N/10</strong> = score de urgencia | <strong>hace Xm</strong> = tiempo detectado | <strong>💰 S/.</strong> = ahorro total.</div>
+          <div class="annotation"><span class="ann-tag">VER OFERTA</span>Abre la página del producto en la tienda en una nueva pestaña.</div>
+          <div class="annotation"><span class="ann-tag" style="background:#444">🔕 / 🔔</span>Botón de alerta. 🔕 = sin alerta. 🔔 = alerta activa. Toca para configurarla.</div>
+        </div>
+      </div>
+
+      <div class="callout info" style="margin-top:20px">
+        <span class="callout-icon">ℹ️</span>
+        <p>Toca <strong>cualquier parte de la tarjeta</strong> (excepto los botones) para abrir el panel de detalle con historial de precios completo y gráfico de evolución.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- 3. DETALLE DEL PRODUCTO                                            -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="product-detail">
+      <div class="section-header">
+        <div class="section-icon blue">📦</div>
+        <div>
+          <h2>Detalle del Producto</h2>
+          <p>Historial completo y gráfico de precio</p>
+        </div>
+      </div>
+
+      <p style="font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:20px">
+        Al tocar una tarjeta de producto se abre un panel flotante con información completa. Contiene:
+      </p>
+
+      <ul class="feature-list">
+        <li><strong>Imagen, tienda y categoría</strong> del producto.</li>
+        <li><strong>Precio actual</strong> en verde y porcentaje de descuento.</li>
+        <li>Badge <strong>🏆 ¡Precio mínimo histórico!</strong> si corresponde.</li>
+        <li><strong>Gráfico SVG</strong> con la evolución del precio a lo largo del tiempo (cada punto es una detección). Una línea que baja indica precio descendiente.</li>
+        <li><strong>Historial en tabla</strong> con fecha, precio y descuento de las últimas 8 detecciones.</li>
+        <li>Botón <strong>🛒 IR A COMPRAR</strong> — abre el producto en la tienda.</li>
+        <li>Botón <strong>🔔 ALERTARME</strong> — abre el formulario de alerta de precio.</li>
+      </ul>
+
+      <div class="callout tip">
+        <span class="callout-icon">💡</span>
+        <p><strong>Cómo leer el gráfico:</strong> el eje Y representa el precio (abajo = más barato). Si la línea está cerca del extremo inferior es porque el precio actual está cerca del mínimo histórico del producto en HuntPrice.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- 4. SISTEMA DE ALERTAS                                              -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="alerts">
+      <div class="section-header">
+        <div class="section-icon green">🔔</div>
+        <div>
+          <h2>Sistema de Alertas</h2>
+          <p>Cómo recibir notificaciones de precios</p>
+        </div>
+      </div>
+
+      <!-- Alerta rápida -->
+      <h3 id="quick-alert" style="font-size:16px;font-weight:700;margin:0 0 14px;scroll-margin-top:80px">
+        4.1 Alerta Rápida de Producto
+      </h3>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:16px">
+        Esta es la forma más sencilla de activar una alerta para un producto específico que ya encontraste.
+      </p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Abre el detalle del producto</h4>
+            <p>Toca la tarjeta del producto que te interesa. Se abrirá el panel de detalle con precios e historial.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Toca "🔔 ALERTARME"</h4>
+            <p>El botón está en la parte inferior del panel de detalle. Al tocarlo, el detalle se cierra y aparece el formulario de alerta.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Completa el formulario de alerta</h4>
+            <p><strong>Email:</strong> tu correo electrónico (obligatorio).<br>
+            <strong>Precio objetivo:</strong> el precio en soles a partir del cual quieres recibir alerta. Si lo dejas vacío, se te notificará ante cualquier cambio de precio. Por defecto se sugiere un 10 % menos que el precio actual.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num green">4</div>
+          <div class="step-content">
+            <h4>¡Listo! Recibirás un email de confirmación</h4>
+            <p>Inmediatamente después de crear la alerta, HuntPrice envía un email de confirmación a tu correo con el nombre del producto, el precio actual y tu precio objetivo. No necesitas registrar contraseña.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <span class="callout-icon">⚠️</span>
+        <p><strong>Si no recibes el email de confirmación</strong> revisa la carpeta de Spam o Promociones. Si el sistema no tiene SMTP configurado, la alerta igual queda guardada en la base de datos pero el email no se envía. El administrador puede configurar Gmail SMTP en el <a href="#admin-config">Panel Admin → Configuración</a>.</p>
+      </div>
+
+      <!-- Suscripción completa -->
+      <h3 id="full-subscription" style="font-size:16px;font-weight:700;margin:28px 0 14px;scroll-margin-top:80px">
+        4.2 Suscripción Completa (Alertas Globales)
+      </h3>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:16px">
+        Para recibir alertas automáticas de <em>cualquier oferta</em> que cumpla tus criterios (no solo un producto específico), regístrate como suscriptor.
+      </p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Abre el formulario de suscripción</h4>
+            <p>Toca el botón <strong>🔔</strong> en la barra de navegación superior, o el enlace "Suscribirse" al pie de la página.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Completa tu perfil de alertas</h4>
+            <p>
+              <strong>Nombre</strong> — cómo te saludamos en los emails.<br>
+              <strong>Email</strong> — obligatorio para notificaciones.<br>
+              <strong>WhatsApp</strong> — opcional, formato <code>+51XXXXXXXXX</code>.<br>
+              <strong>Descuento mínimo</strong> — desliza para definir el % a partir del cual quieres recibir alertas (10–90 %).<br>
+              <strong>Categorías</strong> — marca solo las que te interesan. Si no marcas ninguna recibirás alertas de todas.<br>
+              <strong>Tiendas</strong> — selecciona las tiendas que prefieres. Vacío = todas las tiendas.
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num green">3</div>
+          <div class="step-content">
+            <h4>Activa y empieza a recibir alertas</h4>
+            <p>Desde ese momento el sistema compara cada oferta detectada contra tu perfil. Si cumple todos tus criterios (tienda, categoría, descuento, presupuesto), recibes una notificación inmediata.</p>
+          </div>
+        </div>
+      </div>
+
+      <table class="manual-table" style="margin-top:20px">
+        <thead><tr><th>Campo</th><th>Descripción</th><th>Obligatorio</th></tr></thead>
+        <tbody>
+          <tr><td>Nombre</td><td>Tu nombre, usado en los emails</td><td>✓ Sí</td></tr>
+          <tr><td>Email</td><td>Dirección para recibir alertas y resumen diario</td><td>✓ Sí</td></tr>
+          <tr><td>WhatsApp</td><td>Número peruano con prefijo +51 para mensajes instantáneos</td><td>No</td></tr>
+          <tr><td>Descuento mínimo</td><td>Solo recibes alerta si el descuento es mayor o igual a este valor</td><td>No (def. 30%)</td></tr>
+          <tr><td>Presupuesto máximo</td><td>Solo recibes alerta si el precio de oferta está por debajo de este monto</td><td>No</td></tr>
+          <tr><td>Categorías</td><td>Filtra por tipo de producto</td><td>No</td></tr>
+          <tr><td>Tiendas</td><td>Recibe alertas solo de las tiendas seleccionadas</td><td>No</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- 5. NOTIFICACIONES                                                  -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="notifications">
+      <div class="section-header">
+        <div class="section-icon purple">📨</div>
+        <div>
+          <h2>Notificaciones</h2>
+          <p>Email y WhatsApp</p>
+        </div>
+      </div>
+
+      <!-- Email -->
+      <h3 id="email-notif" style="font-size:16px;font-weight:700;margin:0 0 14px;scroll-margin-top:80px">
+        5.1 Notificaciones por Email
+      </h3>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:16px">
+        HuntPrice envía 3 tipos de emails:
+      </p>
+
+      <div class="badge-row">
+        <span class="badge orange">🔥 Alerta inmediata</span>
+        <span class="badge green">🌅 Resumen diario 8am</span>
+        <span class="badge red">⚠️ Última oportunidad</span>
+        <span class="badge yellow">🔔 Confirmación de alerta</span>
+      </div>
+
+      <table class="manual-table">
+        <thead><tr><th>Tipo</th><th>Cuándo se envía</th><th>Contenido</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>🔥 Alerta inmediata</td>
+            <td>Cada vez que se detecta una oferta que cumple los criterios del suscriptor</td>
+            <td>Foto del producto, precio anterior tachado, precio actual en verde, % descuento, botón "COMPRAR AHORA"</td>
+          </tr>
+          <tr>
+            <td>🌅 Resumen diario</td>
+            <td>Todos los días a las 8:00 am</td>
+            <td>Las 10 mejores ofertas del día con precio, descuento y tienda</td>
+          </tr>
+          <tr>
+            <td>⚠️ Última oportunidad</td>
+            <td>Cuando el stock baja o el precio sube de nuevo</td>
+            <td>Aviso urgente con enlace directo al producto</td>
+          </tr>
+          <tr>
+            <td>🔔 Confirmación</td>
+            <td>Justo después de activar una alerta de producto</td>
+            <td>Precio actual, precio objetivo y enlace al producto</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- WhatsApp -->
+      <h3 id="whatsapp-notif" style="font-size:16px;font-weight:700;margin:28px 0 14px;scroll-margin-top:80px">
+        5.2 Notificaciones por WhatsApp
+      </h3>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+        Los mensajes de WhatsApp tienen el siguiente formato:
+      </p>
+
+      <div class="wa-bubble">
+        <div class="wa-header">🔥 OFERTA FLASH en FALABELLA</div>
+        Samsung QLED 65" 4K Smart TV<br><br>
+        <span class="wa-price-old">S/. 5,499.00</span> → <strong style="color:#7FFFD4;font-size:15px">S/. 1,924.65</strong> <strong>(-65%)</strong><br><br>
+        ⏰ Detectado hace 3 min<br>
+        🛒 https://falabella.com.pe/...<br><br>
+        <em style="font-size:11px;color:#aaa">Responde MÁS para detalles o STOP para darte de baja</em>
+        <div class="wa-time">✓✓ 08:14</div>
+      </div>
+
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
+        Puedes responder a los mensajes de WhatsApp con comandos:
+      </p>
+
+      <table class="manual-table">
+        <thead><tr><th>Comando</th><th>Acción</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>MÁS</kbd></td><td>Recibe las 3 mejores ofertas activas en ese momento</td></tr>
+          <tr><td><kbd>STOP</kbd></td><td>Te da de baja de todas las notificaciones de WhatsApp</td></tr>
+          <tr><td><kbd>REACTIVAR</kbd></td><td>Vuelve a activar tus notificaciones después de STOP</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <span class="callout-icon">ℹ️</span>
+        <p>Para recibir WhatsApp necesitas que el administrador haya configurado Twilio. Además, debes <strong>enviar primero</strong> el código de activación al número del sandbox de Twilio desde tu WhatsApp (el administrador te lo comunicará). Esto es un requisito de WhatsApp Business.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- 6. PANEL ADMIN                                                     -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="admin">
+      <div class="section-header">
+        <div class="section-icon red">⚙️</div>
+        <div>
+          <h2>Panel de Administración</h2>
+          <p>Gestión del sistema, scraper y usuarios</p>
+        </div>
+      </div>
+
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:20px">
+        Accede al panel en <code>http://localhost:3000/admin</code>. Necesitarás la contraseña de administrador (por defecto: <code>huntprice2024</code>).
+      </p>
+
+      <div class="callout tip">
+        <span class="callout-icon">🔐</span>
+        <p><strong>Seguridad:</strong> La contraseña de admin se guarda en <code>sessionStorage</code> del navegador, por lo que persiste mientras dure la sesión. Al cerrar el navegador o la pestaña deberás ingresar de nuevo. Puedes cambiarla en <a href="#admin-config">Configuración</a>.</p>
+      </div>
+
+      <!-- Estadísticas -->
+      <h3 id="admin-stats" style="font-size:16px;font-weight:700;margin:24px 0 14px;scroll-margin-top:80px">
+        6.1 Estadísticas
+      </h3>
+      <table class="manual-table">
+        <thead><tr><th>Tarjeta</th><th>Descripción</th></tr></thead>
+        <tbody>
+          <tr><td>Total Productos</td><td>Productos únicos en la base de datos (acumulado histórico)</td></tr>
+          <tr><td>Activas (1h)</td><td>Productos con precio actualizado en la última hora</td></tr>
+          <tr><td>Mejor Descuento</td><td>Mayor porcentaje de descuento registrado en las últimas 24 h</td></tr>
+          <tr><td>Usuarios</td><td>Suscriptores activos con alertas habilitadas</td></tr>
+          <tr><td>Notif. Hoy</td><td>Notificaciones (email + WhatsApp) enviadas desde medianoche</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:13px;color:var(--text2);margin-top:12px">
+        Los dos gráficos de barras muestran: <strong>Productos por tienda</strong> (cuántas ofertas aporta cada tienda) y <strong>Ofertas por hora del día</strong> (útil para saber a qué horas publican las tiendas sus mejores precios).
+      </p>
+
+      <!-- Scraper -->
+      <h3 id="admin-scraper" style="font-size:16px;font-weight:700;margin:28px 0 14px;scroll-margin-top:80px">
+        6.2 Estado del Scraper
+      </h3>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px">
+        Cada tienda tiene un indicador de color:
+      </p>
+
+      <div class="badge-row">
+        <span class="badge green">● OK</span>
+        <span class="badge red">● ERROR</span>
+        <span class="badge yellow">● CORRIENDO</span>
+        <span class="badge" style="background:var(--bg3);color:var(--text3);border:1px solid var(--border)">● SIN DATOS</span>
+      </div>
+
+      <table class="manual-table">
+        <thead><tr><th>Estado</th><th>Significado</th></tr></thead>
+        <tbody>
+          <tr><td>● OK</td><td>El último escaneo terminó correctamente. Muestra cuántos productos se encontraron.</td></tr>
+          <tr><td>● ERROR</td><td>Falló el último escaneo (posible bloqueo, timeout o cambio en la estructura HTML de la tienda)</td></tr>
+          <tr><td>● CORRIENDO</td><td>El scraper está ejecutándose en este momento para esa tienda</td></tr>
+          <tr><td>● SIN DATOS</td><td>La tienda aún no ha sido escaneada desde que inició el servidor</td></tr>
+        </tbody>
+      </table>
+
+      <p style="font-size:13px;color:var(--text2);margin-top:14px">
+        El botón <strong>⚡ Forzar escaneo</strong> inicia un ciclo completo de scraping de inmediato, sin esperar el intervalo programado. El botón <strong>🔄 Actualizar</strong> recarga el estado desde el servidor sin recargar la página completa.
+      </p>
+
+      <!-- Users -->
+      <h3 id="admin-users" style="font-size:16px;font-weight:700;margin:28px 0 14px;scroll-margin-top:80px">
+        6.3 Gestión de Usuarios
+      </h3>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px">
+        La tabla de usuarios muestra todos los suscriptores. Columnas:
+      </p>
+      <table class="manual-table">
+        <thead><tr><th>Columna</th><th>Descripción</th></tr></thead>
+        <tbody>
+          <tr><td>Nombre</td><td>Nombre con que se registró el usuario</td></tr>
+          <tr><td>Email</td><td>Dirección de correo para notificaciones</td></tr>
+          <tr><td>WhatsApp</td><td>Número de WhatsApp si lo proporcionó</td></tr>
+          <tr><td>Min%</td><td>Porcentaje mínimo de descuento configurado por el usuario</td></tr>
+          <tr><td>Estado</td><td><span class="badge green" style="font-size:10px">Activo</span> o <span class="badge red" style="font-size:10px">Inactivo</span> (se inactiva si respondió STOP por WhatsApp o si el admin lo da de baja)</td></tr>
+          <tr><td>Acciones</td><td>Botón <strong>Baja</strong> — desactiva el usuario y suspende sus alertas. No borra sus datos.</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Config -->
+      <h3 id="admin-config" style="font-size:16px;font-weight:700;margin:28px 0 14px;scroll-margin-top:80px">
+        6.4 Configuración
+      </h3>
+      <div class="cards-2">
+        <div class="info-card">
+          <h4>📧 Email SMTP (Gmail)</h4>
+          <p><strong>Gmail User:</strong> tu dirección Gmail.<br>
+          <strong>Gmail App Password:</strong> contraseña de aplicación de 16 caracteres (no tu contraseña normal).<br>
+          Botón <strong>📤 Enviar email prueba</strong> para verificar la conexión.</p>
+        </div>
+        <div class="info-card">
+          <h4>💬 WhatsApp (Twilio)</h4>
+          <p><strong>Account SID:</strong> empieza con "AC".<br>
+          <strong>Auth Token:</strong> de tu consola Twilio.<br>
+          <strong>Número From:</strong> número sandbox de Twilio.<br>
+          Botón <strong>📲 Probar WhatsApp</strong> para verificar.</p>
+        </div>
+        <div class="info-card">
+          <h4>⏱ Intervalo de escaneo</h4>
+          <p>Minutos entre cada ciclo de scraping. Mínimo recomendado: 5 min. Por defecto: 15 min. Valores bajos aumentan la carga del servidor.</p>
+        </div>
+        <div class="info-card">
+          <h4>🎭 Modo Demo</h4>
+          <p>Al activar, el scraper usa datos de ejemplo en vez de conectarse a las tiendas reales. Útil para probar la app sin acceso a internet o cuando los scrapers están bloqueados.</p>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <span class="callout-icon">⚠️</span>
+        <p>Al guardar la configuración, los cambios se escriben en el archivo <code>.env</code> del servidor y se reinician los transportes de email y WhatsApp. <strong>No es necesario reiniciar el servidor.</strong></p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- 7. CONFIGURACIÓN INICIAL                                           -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="setup">
+      <div class="section-header">
+        <div class="section-icon yellow">🚀</div>
+        <div>
+          <h2>Configuración Inicial (Setup Wizard)</h2>
+          <p>Puesta en marcha por primera vez</p>
+        </div>
+      </div>
+
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:20px">
+        La primera vez que inicias el servidor, serás redirigido automáticamente a <code>/setup.html</code>. El wizard tiene 3 pasos:
+      </p>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Paso 1 — Básico</h4>
+            <p>
+              <strong>Contraseña de administrador</strong> (por defecto <code>huntprice2024</code>).<br>
+              <strong>Intervalo de escaneo</strong> en minutos.<br>
+              <strong>Modo Demo</strong> — activado por defecto. Si lo dejas activado, verás datos de ejemplo inmediatamente sin necesitar internet ni scrapers funcionando.
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Paso 2 — Email (opcional)</h4>
+            <p>
+              Ingresa tu <strong>Gmail</strong> y tu <strong>Contraseña de Aplicación</strong> de Google.<br>
+              Cómo obtenerla: <em>myaccount.google.com → Seguridad → Verificación en 2 pasos → Contraseñas de aplicación</em>.<br>
+              Si lo dejas vacío, las notificaciones por email estarán desactivadas.
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Paso 3 — WhatsApp / Twilio (opcional)</h4>
+            <p>
+              Ingresa tu <strong>Account SID</strong>, <strong>Auth Token</strong> y <strong>número sandbox</strong> de Twilio.<br>
+              Twilio ofrece un tier gratuito. Regístrate en <em>twilio.com</em> y activa el sandbox de WhatsApp en su consola.<br>
+              Si lo dejas vacío, las notificaciones por WhatsApp estarán desactivadas.
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num green">✓</div>
+          <div class="step-content">
+            <h4>¡Listo! Redirige automáticamente al dashboard</h4>
+            <p>La configuración se guarda en el archivo <code>.env</code> y en la base de datos. El scraper se inicia automáticamente 2 segundos después.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout info">
+        <span class="callout-icon">ℹ️</span>
+        <p>Para <strong>volver a mostrar el wizard</strong> en cualquier momento, elimina el archivo <code>huntprice.db</code> y reinicia el servidor. <strong>Esto borrará todos los datos.</strong> Para solo reconfigurar credenciales sin perder datos, usa el <a href="#admin-config">Panel Admin → Configuración</a>.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- 8. PWA                                                             -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="pwa">
+      <div class="section-header">
+        <div class="section-icon teal">📱</div>
+        <div>
+          <h2>Instalar como App (PWA)</h2>
+          <p>HuntPrice en tu pantalla de inicio</p>
+        </div>
+      </div>
+
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:20px">
+        HuntPrice Perú es una <strong>Progressive Web App (PWA)</strong>: se puede instalar en el home screen como si fuera una app nativa, funciona sin conexión mostrando las últimas ofertas cacheadas y recibe notificaciones push.
+      </p>
+
+      <div class="cards-2">
+        <div class="info-card">
+          <h4>📱 Android (Chrome)</h4>
+          <p>1. Abre HuntPrice en Chrome.<br>
+          2. Toca el menú ⋮ (tres puntos).<br>
+          3. Selecciona <strong>"Añadir a pantalla de inicio"</strong>.<br>
+          4. Confirma el nombre y toca <strong>Añadir</strong>.</p>
+        </div>
+        <div class="info-card">
+          <h4>🍎 iOS (Safari)</h4>
+          <p>1. Abre HuntPrice en Safari.<br>
+          2. Toca el botón compartir <strong>□↑</strong>.<br>
+          3. Selecciona <strong>"Agregar a pantalla de inicio"</strong>.<br>
+          4. Confirma y toca <strong>Agregar</strong>.</p>
+        </div>
+      </div>
+
+      <h4 style="font-size:14px;font-weight:700;margin:20px 0 10px">Capacidades offline</h4>
+      <ul class="feature-list">
+        <li>Las últimas ofertas cargadas se almacenan en caché del Service Worker.</li>
+        <li>Sin conexión, verás las ofertas del último acceso con un indicador de "sin conexión".</li>
+        <li>Al recuperar conexión, los datos se actualizan automáticamente.</li>
+        <li>Las notificaciones push del navegador funcionan incluso con la app en segundo plano (requiere permiso del navegador).</li>
+      </ul>
+
+      <div class="callout tip">
+        <span class="callout-icon">💡</span>
+        <p>Para <strong>tablets Samsung Tab S9</strong> (pantalla grande), la app detecta el ancho disponible y muestra más columnas de productos automáticamente, aprovechando el espacio de pantalla.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- 9. SCORE DE URGENCIA                                               -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="scores">
+      <div class="section-header">
+        <div class="section-icon">🔥</div>
+        <div>
+          <h2>Score de Urgencia (1–10)</h2>
+          <p>Cómo se calcula la prioridad de cada oferta</p>
+        </div>
+      </div>
+
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:20px">
+        Cada producto recibe un <strong>Score de Urgencia</strong> del 1 al 10 que combina tres factores para ayudarte a priorizar las mejores oportunidades:
+      </p>
+
+      <div class="score-demo">
+        <div class="score-row">
+          <div class="score-label">Porcentaje de descuento</div>
+          <div class="score-bar"><div class="score-fill" style="width:50%"></div></div>
+          <div class="score-num">max 5</div>
+        </div>
+        <div class="score-row">
+          <div class="score-label">Stock disponible</div>
+          <div class="score-bar"><div class="score-fill" style="width:30%"></div></div>
+          <div class="score-num">max 3</div>
+        </div>
+        <div class="score-row">
+          <div class="score-label">Oferta flash (tiempo límite)</div>
+          <div class="score-bar"><div class="score-fill" style="width:20%"></div></div>
+          <div class="score-num">max 2</div>
+        </div>
+      </div>
+
+      <table class="manual-table" style="margin-top:20px">
+        <thead><tr><th>Factor</th><th>Puntos</th><th>Condición</th></tr></thead>
+        <tbody>
+          <tr><td>Descuento ≥ 90 %</td><td>5 pts</td><td rowspan="5" style="vertical-align:middle;color:var(--text2);font-size:12px">Solo el nivel más alto del descuento suma</td></tr>
+          <tr><td>Descuento ≥ 70 %</td><td>4 pts</td></tr>
+          <tr><td>Descuento ≥ 50 %</td><td>3 pts</td></tr>
+          <tr><td>Descuento ≥ 30 %</td><td>2 pts</td></tr>
+          <tr><td>Descuento &lt; 30 %</td><td>1 pt</td></tr>
+          <tr><td>Stock ≤ 5 unidades</td><td>+3 pts</td><td style="font-size:12px;color:var(--text2)">Si se publica el stock</td></tr>
+          <tr><td>Stock 6–20 unidades</td><td>+2 pts</td><td style="font-size:12px;color:var(--text2)">Si se publica el stock</td></tr>
+          <tr><td>Stock &gt; 20 unidades</td><td>+1 pt</td><td style="font-size:12px;color:var(--text2)">Si se publica el stock</td></tr>
+          <tr><td>Oferta flash con tiempo</td><td>+2 pts</td><td style="font-size:12px;color:var(--text2)">Si la tienda publica duración</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <span class="callout-icon">💡</span>
+        <p>Un score de <strong>8 o más</strong> se considera urgente: los puntos de urgencia en la tarjeta parpadean en rojo. Usa el ordenamiento <strong>"Más urgente"</strong> para ver estas ofertas primero.</p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- 10. GLOSARIO                                                        -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="glossary">
+      <div class="section-header">
+        <div class="section-icon blue">📖</div>
+        <div>
+          <h2>Glosario</h2>
+          <p>Términos usados en la aplicación</p>
+        </div>
+      </div>
+
+      <table class="manual-table">
+        <thead><tr><th>Término</th><th>Definición</th></tr></thead>
+        <tbody>
+          <tr><td>Oferta Flash</td><td>Descuento de duración limitada, normalmente horas o pocos días. La tienda puede publicar la hora de fin.</td></tr>
+          <tr><td>Mínimo Histórico</td><td>El precio más bajo registrado para ese producto desde que HuntPrice empezó a monitorearlo. Se marca con el badge dorado 🏆.</td></tr>
+          <tr><td>Score de Urgencia</td><td>Valor del 1 al 10 que combina % descuento, stock y tiempo límite para medir qué tan urgente es aprovechar la oferta.</td></tr>
+          <tr><td>Scraper</td><td>Programa que visita automáticamente las páginas de ofertas de cada tienda y extrae información de precios.</td></tr>
+          <tr><td>SSE (Server-Sent Events)</td><td>Tecnología que permite al servidor enviar actualizaciones al navegador en tiempo real sin recargar la página.</td></tr>
+          <tr><td>PWA</td><td>Progressive Web App — aplicación web que se comporta como una app nativa: instalable, con ícono, soporte offline y notificaciones push.</td></tr>
+          <tr><td>Service Worker</td><td>Script que se ejecuta en segundo plano en el navegador, gestiona la caché offline y las notificaciones push.</td></tr>
+          <tr><td>SMTP</td><td>Protocolo para envío de emails. HuntPrice usa Gmail SMTP con Contraseña de Aplicación.</td></tr>
+          <tr><td>Twilio Sandbox</td><td>Entorno de prueba de Twilio para WhatsApp Business. Los usuarios deben enviar un código de activación antes de poder recibir mensajes.</td></tr>
+          <tr><td>Modo Demo</td><td>Cuando está activo, el sistema muestra datos de ejemplo generados internamente en lugar de hacer scraping real.</td></tr>
+          <tr><td>Alerta Global</td><td>Se activa al suscribirse con email. Notifica cualquier oferta que cumpla los criterios del suscriptor (tienda, categoría, % mínimo).</td></tr>
+          <tr><td>Alerta de Producto</td><td>Alerta específica para un producto. Notifica cuando ese producto baja del precio objetivo definido por el usuario.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!-- 11. FAQ                                                             -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <section class="manual-section" id="faq">
+      <div class="section-header">
+        <div class="section-icon teal">❓</div>
+        <div>
+          <h2>Preguntas Frecuentes</h2>
+          <p>Soluciones a problemas comunes</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>¿Por qué veo "Cargando..." y no aparecen productos?</span>
+          <span>▾</span>
+        </div>
+        <div class="faq-a">
+          Puede ocurrir por tres razones: (1) el servidor acaba de iniciar y está cargando los datos de demostración — espera 5 segundos y recarga. (2) El scraper aún no ha corrido — ve al panel Admin y toca <strong>⚡ Forzar escaneo</strong>. (3) El servidor no está corriendo — asegúrate de tener el servidor activo con <code>node server.js</code>.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>No recibo emails de alerta aunque me suscribí</span>
+          <span>▾</span>
+        </div>
+        <div class="faq-a">
+          Verifica: (1) Que el SMTP de Gmail esté configurado en el panel Admin. (2) Que la Contraseña de Aplicación sea correcta (no tu contraseña normal de Gmail). (3) Que la verificación en 2 pasos de Google esté activada. (4) Revisa la carpeta Spam de tu correo. Puedes probar la conexión con el botón <strong>📤 Enviar email prueba</strong> en Admin → Configuración.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>El panel admin muestra "No autorizado" y los datos no cargan</span>
+          <span>▾</span>
+        </div>
+        <div class="faq-a">
+          Ingresa la contraseña correcta en el login del admin. La contraseña por defecto es <code>huntprice2024</code>. Si la cambiaste durante el setup, usa la que estableciste. La contraseña se guarda en sessionStorage: si cerraste el navegador deberás ingresar de nuevo. Para recuperarla, revisa el archivo <code>.env</code> en la carpeta del proyecto.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>¿Los precios son 100% exactos y en tiempo real?</span>
+          <span>▾</span>
+        </div>
+        <div class="faq-a">
+          Los precios se extraen directamente de las páginas web de las tiendas. Pueden haber pequeñas diferencias si la tienda actualiza el precio después del último escaneo. La frecuencia del escaneo (por defecto 15 min) determina qué tan actualizados están. Siempre verifica el precio final en la tienda antes de comprar: usa el botón <strong>🛒 VER OFERTA</strong> para ir directo al producto.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>El scraper muestra ERROR para algunas tiendas</span>
+          <span>▾</span>
+        </div>
+        <div class="faq-a">
+          Las tiendas pueden bloquear scrapers automáticos, cambiar la estructura de su HTML o presentar fallas temporales. Soluciones: (1) Activa <strong>Modo Demo</strong> en el panel Admin para usar datos de ejemplo mientras tanto. (2) Espera al próximo ciclo (el sistema tiene reintentos automáticos con backoff exponencial). (3) Si el error persiste, es posible que los selectores HTML del scraper necesiten actualización — contacta al administrador del sistema.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>¿Cómo cancelo mis alertas?</span>
+          <span>▾</span>
+        </div>
+        <div class="faq-a">
+          Por email: hay un enlace "Darse de baja" al pie de cada email de notificación. Por WhatsApp: responde <kbd>STOP</kbd> a cualquier mensaje de HuntPrice. El administrador también puede darte de baja desde el panel Admin → Gestión de Usuarios.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>¿Se puede ejecutar desde Termux en Android?</span>
+          <span>▾</span>
+        </div>
+        <div class="faq-a">
+          Sí. Requiere Node.js 22.5 o superior (instala con <code>pkg install nodejs</code>). La base de datos usa el módulo built-in <code>node:sqlite</code> de Node.js, sin compilación nativa. Consulta el <code>README.md</code> para instrucciones completas de instalación en Termux.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>¿Qué significa el badge "NUEVO" que parpadea?</span>
+          <span>▾</span>
+        </div>
+        <div class="faq-a">
+          El badge verde "NUEVO" aparece cuando el sistema detectó esa oferta por primera vez hace <strong>menos de 10 minutos</strong>. Es la indicación más fresca del dashboard. Las alertas de WhatsApp también incluyen el tiempo transcurrido desde la detección.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>Vi unos confetis en la pantalla, ¿es normal?</span>
+          <span>▾</span>
+        </div>
+        <div class="faq-a">
+          ¡Sí! La animación de confetis se dispara automáticamente cuando el sistema detecta una oferta con <strong>más de 80 % de descuento</strong>. Es una forma de celebrar que encontraste una ganga excepcional. 🎉
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Versión y créditos ──────────────────────────────────────────── -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;text-align:center;color:var(--text3);font-size:12px">
+      <div style="font-size:32px;margin-bottom:10px">🔥</div>
+      <div style="font-weight:800;font-size:16px;color:var(--text);margin-bottom:6px">HuntPrice Perú v1.0.0</div>
+      <div>Manual generado · Node.js 22.5+ · node:sqlite · Express · Nodemailer · Twilio WhatsApp</div>
+      <div style="margin-top:10px">
+        <a href="/" style="color:var(--orange)">← Volver al Dashboard</a>
+        &nbsp;·&nbsp;
+        <a href="/admin" style="color:var(--orange)">Panel Admin</a>
+        &nbsp;·&nbsp;
+        <a href="/setup.html" style="color:var(--orange)">Setup Wizard</a>
+      </div>
+    </div>
+
+  </main>
+</div><!-- /.manual-layout -->
+
+<script>
+  // ── TOC active on scroll ───────────────────────────────────────────────
+  const sections = document.querySelectorAll('.manual-section');
+  const tocLinks = document.querySelectorAll('.toc-list a');
+
+  function updateToc() {
+    let current = '';
+    sections.forEach(s => {
+      if (window.scrollY >= s.offsetTop - 100) current = s.id;
+    });
+    tocLinks.forEach(a => {
+      const href = a.getAttribute('href').slice(1);
+      a.classList.toggle('active', href === current);
+    });
+  }
+
+  window.addEventListener('scroll', updateToc, { passive: true });
+  updateToc();
+
+  // ── FAQ accordion ──────────────────────────────────────────────────────
+  function toggleFaq(el) {
+    const item = el.parentElement;
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+    if (!isOpen) item.classList.add('open');
+  }
+
+  // ── Smooth scroll for TOC links ────────────────────────────────────────
+  tocLinks.forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const id = a.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+
+  // ── Theme aware (inherit from main app) ───────────────────────────────
+  const theme = localStorage.getItem('hp_theme');
+  if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+</script>
+</body>
+</html>

@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin – HuntPrice Perú</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .admin-header { background: linear-gradient(135deg,#1a0800,#0d0d0d); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; align-items:center; justify-content:space-between; }
+    .log-entry { font-size:12px; padding:6px 10px; border-radius:6px; margin-bottom:4px; background:var(--bg3); display:flex; align-items:center; gap:8px; }
+    .btn-sm { padding:6px 14px; border-radius:6px; border:1px solid; font-size:12px; cursor:pointer; transition:.2s; }
+    .btn-sm.green { background:rgba(0,204,102,.1); border-color:var(--green); color:var(--green); }
+    .btn-sm.green:hover { background:rgba(0,204,102,.2); }
+    .btn-sm.orange { background:rgba(255,102,0,.1); border-color:var(--orange); color:var(--orange); }
+    .btn-sm.orange:hover { background:rgba(255,102,0,.2); }
+    .pw-wrap { position:relative; display:flex; align-items:center; }
+    .pw-wrap .form-input { flex:1; padding-right:38px; }
+    .pw-toggle { position:absolute; right:10px; background:none; border:none; cursor:pointer; font-size:16px; color:var(--text2); padding:2px; line-height:1; }
+    .pw-toggle:hover { color:var(--orange); }
+    .btn-sm.red { background:rgba(255,51,51,.1); border-color:var(--red); color:var(--red); }
+    .section-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:20px; margin-bottom:20px; }
+    .login-wall { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:999; }
+    .login-box { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:40px; max-width:360px; width:100%; text-align:center; }
+    .store-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+    .store-indicator { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+    .ind-ok { background:var(--green); }
+    .ind-error { background:var(--red); }
+    .ind-idle { background:var(--text3); }
+    .ind-running { background:var(--yellow); animation:pulse 1s infinite; }
+  </style>
+</head>
+<body>
+
+<!-- Login Wall -->
+<div class="login-wall" id="loginWall">
+  <div class="login-box">
+    <div style="font-size:48px;margin-bottom:16px">🔐</div>
+    <h2 style="font-size:22px;font-weight:800;margin-bottom:8px">Panel Admin</h2>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:24px">HuntPrice Perú</p>
+    <div class="pw-wrap" style="margin-bottom:12px">
+      <input type="password" id="adminPass" class="form-input" placeholder="Contraseña de admin" onkeydown="if(event.key==='Enter')doLogin()">
+      <button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1">👁️</button>
+    </div>
+    <button class="btn-primary" onclick="doLogin()">Entrar</button>
+    <p style="margin-top:16px;font-size:12px;color:var(--text3)">Contraseña por defecto: <code>huntprice2024</code></p>
+  </div>
+</div>
+
+<!-- Admin Header -->
+<div class="admin-header">
+  <div style="display:flex;align-items:center;gap:12px">
+    <a href="/" style="color:var(--text2);font-size:20px;text-decoration:none">←</a>
+    <div style="font-size:18px;font-weight:800">🔥 HuntPrice <span style="color:var(--orange)">Admin</span></div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="live-badge"><span class="live-dot"></span>EN VIVO</span>
+    <button class="btn-sm orange" onclick="triggerScan()">⚡ Escanear ahora</button>
+    <button class="btn-sm" style="border-color:#555;color:#aaa" onclick="doLogout()">🚪 Cerrar sesión</button>
+  </div>
+</div>
+
+<div class="admin-layout">
+
+  <!-- Stats Row -->
+  <div class="admin-grid" id="statsGrid">
+    <div class="admin-card">
+      <h3>Total Productos</h3>
+      <div class="big-num" id="aStatTotal">-</div>
+    </div>
+    <div class="admin-card">
+      <h3>Activas (1h)</h3>
+      <div class="big-num" id="aStatActive">-</div>
+    </div>
+    <div class="admin-card">
+      <h3>Mejor Descuento</h3>
+      <div class="big-num" id="aStatTop">-</div>
+    </div>
+    <div class="admin-card">
+      <h3>Usuarios</h3>
+      <div class="big-num" id="aStatUsers">-</div>
+    </div>
+    <div class="admin-card">
+      <h3>Notif. Hoy</h3>
+      <div class="big-num" id="aStatNotif">-</div>
+    </div>
+  </div>
+
+  <!-- Layout 2 cols -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" id="mainGrid">
+
+    <!-- Scraper Status -->
+    <div class="section-card">
+      <div class="section-title">🤖 Estado del Scraper</div>
+      <div id="scraperStatus">
+        <div style="color:var(--text2);font-size:13px">Cargando...</div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-sm orange" onclick="triggerScan()">⚡ Forzar escaneo</button>
+        <button class="btn-sm green" onclick="loadScraperStatus()">🔄 Actualizar</button>
+      </div>
+    </div>
+
+    <!-- Offers by Store Chart -->
+    <div class="section-card">
+      <div class="section-title">📊 Ofertas por Tienda</div>
+      <div id="storeChart">
+        <div style="color:var(--text2);font-size:13px">Cargando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scrape Logs -->
+  <div class="section-card">
+    <div class="section-title" style="justify-content:space-between">
+      <span>📋 Log de Escaneos</span>
+      <button class="btn-sm orange" onclick="loadScrapeLogs()">🔄 Refrescar</button>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>Tienda</th><th>Estado</th><th>Productos</th><th>Tiempo</th><th>Detalle</th></tr></thead>
+        <tbody id="scrapeLogs"><tr><td colspan="5" style="color:var(--text2)">Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Users -->
+  <div class="section-card">
+    <div class="section-title">👥 Usuarios Suscritos</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>Nombre</th><th>Email</th><th>WhatsApp</th><th>Min%</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody id="usersTable"><tr><td colspan="6" style="color:var(--text2)">Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Configuration -->
+  <div class="section-card">
+    <div class="section-title">⚙️ Configuración</div>
+    <form id="configForm" onsubmit="saveConfig(event)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--orange);margin-bottom:12px">📧 Email SMTP</div>
+          <div class="form-group">
+            <label class="form-label">Gmail User</label>
+            <input class="form-input" name="gmail_user" id="cfg_gmail_user" placeholder="tu@gmail.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Gmail App Password</label>
+            <div class="pw-wrap"><input class="form-input" type="password" name="gmail_app_password" placeholder="xxxx xxxx xxxx xxxx"><button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1">👁️</button></div>
+          </div>
+          <button type="button" class="btn-sm green" onclick="testEmail()">📤 Enviar email prueba</button>
+          <input class="form-input" id="testEmailInput" placeholder="email@test.com" style="margin-top:8px;margin-bottom:4px">
+        </div>
+
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:12px">💬 WhatsApp Twilio</div>
+          <div class="form-group">
+            <label class="form-label">Account SID</label>
+            <input class="form-input" name="twilio_sid" id="cfg_twilio_sid" placeholder="ACxxxxxx">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Auth Token</label>
+            <div class="pw-wrap"><input class="form-input" type="password" name="twilio_token" placeholder="auth token"><button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1">👁️</button></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Número From</label>
+            <input class="form-input" name="twilio_from" id="cfg_twilio_from" placeholder="+14155238886">
+          </div>
+          <button type="button" class="btn-sm green" onclick="testWhatsApp()">📲 Probar WhatsApp</button>
+          <input class="form-input" id="testWaInput" placeholder="+51987654321" style="margin-top:8px;margin-bottom:4px">
+        </div>
+      </div>
+
+      <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="form-group">
+          <label class="form-label">Intervalo de escaneo (min)</label>
+          <input class="form-input" type="number" name="scan_interval" id="cfg_scan_interval" value="15" min="5" max="120">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contraseña Admin</label>
+          <div class="pw-wrap"><input class="form-input" type="password" name="admin_password" placeholder="Nueva contraseña"><button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1">👁️</button></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Descuento mínimo para alertas (%)</label>
+          <input class="form-input" type="number" name="min_discount" id="cfg_min_discount" value="30" min="5" max="90">
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:12px;padding-top:20px">
+          <label class="toggle">
+            <input type="checkbox" id="cfg_demo_mode" name="demo_mode">
+            <span class="toggle-track"></span>
+          </label>
+          <div>
+            <div style="font-size:13px;font-weight:600">Modo Demo</div>
+            <div style="font-size:11px;color:var(--text2)">Usar datos de ejemplo</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;color:#a78bfa;margin-bottom:12px">🤖 HuntBot – Google Gemini API Key</div>
+        <div class="form-group">
+          <label class="form-label">Google Gemini API Key</label>
+          <div class="pw-wrap"><input class="form-input" type="password" name="gemini_api_key" id="cfg_gemini_key" placeholder="AIza..."><button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1">👁️</button></div>
+          <div class="form-hint">Necesaria para el chatbot HuntBot. Obtén tu key en <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--orange)">aistudio.google.com/apikey</a></div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-primary" style="margin-top:20px">💾 Guardar configuración</button>
+    </form>
+  </div>
+
+  <!-- Offers by Hour -->
+  <div class="section-card">
+    <div class="section-title">📈 Ofertas detectadas por hora del día</div>
+    <div id="hourChart" style="padding:10px 0">
+      <div style="color:var(--text2);font-size:13px">Cargando...</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+  function togglePw(btn) {
+    const input = btn.parentElement.querySelector('input');
+    const isText = input.type === 'text';
+    input.type = isText ? 'password' : 'text';
+    btn.textContent = isText ? '👁️' : '🙈';
+  }
+
+  function doLogout() {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = '/';
+  }
+
+  // ── Auth — persiste en sessionStorage para sobrevivir refrescos ────────────
+  let adminPass = sessionStorage.getItem('hp_admin_pass') || '';
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (adminPass) {
+      document.getElementById('loginWall').style.display = 'none';
+      loadAll();
+    }
+    if (window.innerWidth < 768) {
+      document.getElementById('mainGrid').style.gridTemplateColumns = '1fr';
+    }
+  });
+
+  function doLogin() {
+    const pass = document.getElementById('adminPass').value.trim();
+    if (!pass) return;
+    adminPass = pass;
+    sessionStorage.setItem('hp_admin_pass', pass);
+    document.getElementById('loginWall').style.display = 'none';
+    loadAll();
+  }
+
+  function showLoginWall(reason) {
+    adminPass = '';
+    sessionStorage.removeItem('hp_admin_pass');
+    const wall = document.getElementById('loginWall');
+    wall.style.display = 'flex';
+    const passInput = document.getElementById('adminPass');
+    passInput.value = '';
+    passInput.focus();
+    if (reason) showToast('🔐', 'Sesión expirada', reason);
+  }
+
+  // ── Load All ──────────────────────────────────────────────────────────────
+  function loadAll() {
+    loadStats();
+    loadScraperStatus();
+    loadScrapeLogs();
+    loadUsers();
+    loadConfig();
+  }
+
+  async function adminFetch(url, opts = {}) {
+    // Re-leer de sessionStorage en cada request para no perder la sesión
+    const pass = sessionStorage.getItem('hp_admin_pass') || adminPass;
+    if (!pass) {
+      showLoginWall('Sesión no encontrada. Inicia sesión.');
+      throw new Error('No autorizado');
+    }
+    adminPass = pass; // sincronizar variable en memoria
+    const res = await fetch(url, {
+      method: opts.method || 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pass },
+      body: opts.body ? JSON.stringify(opts.body) : undefined
+    });
+    if (res.status === 401) {
+      showLoginWall('Contraseña incorrecta. Vuelve a ingresar.');
+      throw new Error('No autorizado');
+    }
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Error del servidor');
+    return json;
+  }
+
+  // ── Stats ──────────────────────────────────────────────────────────────────
+  async function loadStats() {
+    try {
+      const { data } = await adminFetch('/api/admin/stats');
+      document.getElementById('aStatTotal').textContent = data.total;
+      document.getElementById('aStatActive').textContent = data.active;
+      document.getElementById('aStatTop').textContent = data.topOffer ? Math.round(data.topOffer) + '%' : '-';
+      document.getElementById('aStatUsers').textContent = data.users;
+      document.getElementById('aStatNotif').textContent = data.notifToday;
+
+      // Store chart
+      renderStoreChart(data.byStore);
+      // Hour chart
+      renderHourChart(data.byHour);
+    } catch (e) { showToast('❌', 'Error', e.message); }
+  }
+
+  function renderStoreChart(byStore) {
+    if (!byStore || !byStore.length) return;
+    const max = Math.max(...byStore.map(s => s.count));
+    const colors = { Falabella:'#FF6600', Ripley:'#0066CC', Oechsle:'#CC0033', Sodimac:'#FF8800', Promart:'#009900', PlazaVea:'#CC6600', 'Mercado Libre':'#FFE600', Coolbox:'#00C0FF', Samsung:'#1428A0' };
+    document.getElementById('storeChart').innerHTML = byStore.map(s => `
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+          <span>${s.store}</span><span style="font-weight:700;color:var(--orange)">${s.count}</span>
+        </div>
+        <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${(s.count/max*100).toFixed(1)}%;background:${colors[s.store]||'var(--orange)'};border-radius:4px;transition:.5s"></div>
+        </div>
+      </div>`).join('');
+  }
+
+  function renderHourChart(byHour) {
+    if (!byHour || !byHour.length) return;
+    const max = Math.max(...byHour.map(h => h.count));
+    document.getElementById('hourChart').innerHTML = `
+      <div style="display:flex;align-items:flex-end;gap:4px;height:100px;padding:0 8px">
+        ${Array.from({length:24},(_,i) => {
+          const h = byHour.find(b => parseInt(b.hour) === i);
+          const pct = h ? (h.count/max*100) : 0;
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+            <div style="flex:1;width:100%;display:flex;align-items:flex-end">
+              <div style="width:100%;height:${pct}%;background:${pct>50?'var(--orange)':'var(--bg3)'};border-radius:3px 3px 0 0;transition:.5s;min-height:2px"></div>
+            </div>
+            <div style="font-size:9px;color:var(--text3)">${String(i).padStart(2,'0')}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:4px">Hora del día</div>`;
+  }
+
+  // ── Scraper Status ──────────────────────────────────────────────────────────
+  async function loadScraperStatus() {
+    try {
+      const { data } = await adminFetch('/api/admin/scraper-status');
+      const stores = ['Falabella','Ripley','Oechsle','Sodimac','Promart','PlazaVea','Mercado Libre','Coolbox','Samsung'];
+      document.getElementById('scraperStatus').innerHTML = stores.map(store => {
+        const r = data[store];
+        const cls = r ? (r.status === 'ok' ? 'ind-ok' : r.status === 'error' ? 'ind-error' : 'ind-running') : 'ind-idle';
+        const text = r ? (r.status === 'ok' ? `OK · ${r.count} productos` : r.error || r.status) : 'Sin datos aún';
+        return `<div class="store-row">
+          <div class="store-indicator ${cls}"></div>
+          <div style="font-size:13px;font-weight:600;width:90px">${store}</div>
+          <div style="font-size:12px;color:var(--text2);flex:1">${text}</div>
+          ${r?.ts ? `<div style="font-size:10px;color:var(--text3)">${new Date(r.ts).toLocaleTimeString('es-PE')}</div>` : ''}
+        </div>`;
+      }).join('');
+    } catch (e) {
+      document.getElementById('scraperStatus').innerHTML =
+        `<p style="color:var(--red);font-size:13px;padding:8px 0">⚠ ${e.message}</p>`;
+    }
+  }
+
+  // ── Scrape Logs ──────────────────────────────────────────────────────────────
+  async function loadScrapeLogs() {
+    try {
+      const { data } = await adminFetch('/api/admin/scrape-logs');
+      document.getElementById('scrapeLogs').innerHTML = data.slice(0,30).map(log => {
+        const statusCls = log.status === 'ok' ? 'status-ok' : 'status-error';
+        const ts = new Date(log.finished_at).toLocaleString('es-PE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+        return `<tr>
+          <td><strong>${log.store}</strong></td>
+          <td class="${statusCls}">${log.status.toUpperCase()}</td>
+          <td>${log.products_found}</td>
+          <td style="font-size:11px;color:var(--text3)">${ts}</td>
+          <td style="font-size:11px;color:var(--text3)">${log.error_message || '-'}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="5" style="color:var(--text2)">Sin registros aún</td></tr>';
+    } catch (e) {
+      document.getElementById('scrapeLogs').innerHTML =
+        `<tr><td colspan="5" style="color:var(--red)">⚠ ${e.message}</td></tr>`;
+    }
+  }
+
+  // ── Users ──────────────────────────────────────────────────────────────────
+  async function loadUsers() {
+    try {
+      const { data } = await adminFetch('/api/admin/users');
+      document.getElementById('usersTable').innerHTML = data.map(u => `
+        <tr>
+          <td>${u.name}</td>
+          <td style="font-size:12px">${u.email}</td>
+          <td style="font-size:12px">${u.whatsapp || '-'}</td>
+          <td>${u.min_discount}%</td>
+          <td class="${u.active ? 'status-ok' : 'status-error'}">${u.active ? 'Activo' : 'Inactivo'}</td>
+          <td><button class="btn-sm red" onclick="deleteUser(${u.id})">Baja</button></td>
+        </tr>`).join('') || '<tr><td colspan="6" style="color:var(--text2)">Sin usuarios aún</td></tr>';
+    } catch (e) {
+      document.getElementById('usersTable').innerHTML =
+        `<tr><td colspan="6" style="color:var(--red)">⚠ ${e.message}</td></tr>`;
+    }
+  }
+
+  async function deleteUser(id) {
+    if (!confirm('¿Dar de baja este usuario?')) return;
+    try {
+      await adminFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+      loadUsers();
+      showToast('✅', 'Usuario dado de baja', '');
+    } catch (e) { showToast('❌', 'Error', e.message); }
+  }
+
+  // ── Config ──────────────────────────────────────────────────────────────────
+  async function loadConfig() {
+    try {
+      const { data } = await adminFetch('/api/admin/config');
+      if (data.gmail_user) document.getElementById('cfg_gmail_user').value = data.gmail_user;
+      if (data.twilio_sid) document.getElementById('cfg_twilio_sid').value = data.twilio_sid;
+      if (data.twilio_from) document.getElementById('cfg_twilio_from').value = data.twilio_from;
+      if (data.scan_interval) document.getElementById('cfg_scan_interval').value = data.scan_interval;
+      document.getElementById('cfg_demo_mode').checked = !!data.demo_mode;
+      if (data.gemini_api_key) document.getElementById('cfg_gemini_key').value = data.gemini_api_key;
+    } catch (e) {
+      showToast('⚠️', 'Config no cargada', e.message);
+    }
+  }
+
+  async function saveConfig(event) {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    const body = {};
+    for (const [k,v] of form.entries()) { if (v) body[k] = v; }
+    body.demo_mode = document.getElementById('cfg_demo_mode').checked;
+    try {
+      await adminFetch('/api/admin/config', { method: 'POST', body });
+      showToast('✅', 'Guardado', 'Configuración actualizada');
+    } catch (e) { showToast('❌', 'Error', e.message); }
+  }
+
+  // ── Scan Polling ───────────────────────────────────────────────────────────
+  let _scanPoller = null;
+
+  function startScanPoller() {
+    if (_scanPoller) clearInterval(_scanPoller);
+    _scanPoller = setInterval(() => { loadScrapeLogs(); loadScraperStatus(); }, 5000);
+    // Máximo 5 minutos para evitar polling infinito
+    setTimeout(stopScanPoller, 300000);
+  }
+
+  function stopScanPoller() {
+    if (_scanPoller) { clearInterval(_scanPoller); _scanPoller = null; }
+    loadStats();
+    loadScrapeLogs();
+  }
+
+  // ── Scan ──────────────────────────────────────────────────────────────────
+  async function triggerScan() {
+    try {
+      await adminFetch('/api/admin/scrape', { method: 'POST' });
+      showToast('⚡', 'Escaneo iniciado', 'Revisando todas las tiendas...');
+      loadScrapeLogs();
+      startScanPoller();
+    } catch (e) { showToast('❌', 'Error', e.message); }
+  }
+
+  // ── Test notifications ─────────────────────────────────────────────────────
+  async function testEmail() {
+    const email = document.getElementById('testEmailInput').value;
+    if (!email) { showToast('⚠️', 'Ingresa un email', ''); return; }
+    try {
+      await adminFetch('/api/admin/test-email', { method: 'POST', body: { email } });
+      showToast('📧', 'Email enviado', email);
+    } catch (e) { showToast('❌', 'Error', e.message); }
+  }
+
+  async function testWhatsApp() {
+    const wa = document.getElementById('testWaInput').value;
+    if (!wa) { showToast('⚠️', 'Ingresa un número', ''); return; }
+    try {
+      await adminFetch('/api/admin/test-whatsapp', { method: 'POST', body: { whatsapp: wa } });
+      showToast('💬', 'WhatsApp enviado', wa);
+    } catch (e) { showToast('❌', 'Error', e.message); }
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  function showToast(icon, title, body) {
+    const id = 'toast_' + Date.now();
+    document.getElementById('toastContainer').insertAdjacentHTML('beforeend', `
+      <div id="${id}" class="toast">
+        <span class="toast-icon">${icon}</span>
+        <div class="toast-content">
+          <div class="toast-title">${title}</div>
+          <div class="toast-body">${body}</div>
+        </div>
+        <button class="toast-close" onclick="document.getElementById('${id}').remove()">✕</button>
+      </div>`);
+    setTimeout(() => document.getElementById(id)?.remove(), 5000);
+  }
+
+  // ── SSE (/api/events — named events for per-store status) ─────────────────
+  function initSSE() {
+    const es = new EventSource('/api/events');
+
+    es.addEventListener('scraper_status', e => {
+      if (!adminPass) return;
+      const d = JSON.parse(e.data);
+      loadScraperStatus();
+      if (d.status === 'ok') showToast('✅', d.store, `${d.count} productos`);
+      if (d.status === 'error') showToast('❌', d.store, d.error || 'Error');
+    });
+
+    es.addEventListener('scan_done', () => {
+      if (!adminPass) return;
+      stopScanPoller();
+    });
+
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) {
+        console.warn('[SSE] /api/events cerrado, reconectará automáticamente.');
+      }
+    };
+
+    return es;
+  }
+
+  // ── Stream (/api/stream — plain onmessage, triggers full dashboard refresh) ─
+  let _adminStreamSrc = null;
+
+  function initStream() {
+    if (_adminStreamSrc) _adminStreamSrc.close();
+
+    const src = new EventSource('/api/stream');
+    _adminStreamSrc = src;
+
+    src.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'PRODUCTS_UPDATED' && adminPass) {
+          loadAll();
+          showToast('🔄', 'Actualización en vivo', 'Datos sincronizados automáticamente');
+        }
+      } catch (_) {}
+    };
+
+    src.onerror = () => {
+      src.close();
+      _adminStreamSrc = null;
+      setTimeout(initStream, 5000);
+    };
+  }
+
+  initSSE();
+  initStream();
+</script>
+</body>
+</html>

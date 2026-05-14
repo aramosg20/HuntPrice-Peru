@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Configuración Inicial – HuntPrice Perú</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .pw-wrap { position:relative; display:flex; align-items:center; }
+    .pw-wrap .form-input { flex:1; padding-right:38px; }
+    .pw-toggle { position:absolute; right:10px; background:none; border:none; cursor:pointer; font-size:16px; color:var(--text2); padding:2px; line-height:1; }
+    .pw-toggle:hover { color:var(--orange); }
+  </style>
+</head>
+<body>
+<div class="setup-wrapper">
+  <div class="setup-box">
+    <div class="setup-logo">
+      <div style="font-size:56px">🔥</div>
+      <h1>Hunt<span style="color:var(--orange)">Price</span> Perú</h1>
+      <p>Configuración inicial del sistema</p>
+    </div>
+
+    <div class="setup-tabs">
+      <div class="setup-tab active" onclick="switchTab(0)">1. Básico</div>
+      <div class="setup-tab" onclick="switchTab(1)">2. Email</div>
+      <div class="setup-tab" onclick="switchTab(2)">3. WhatsApp</div>
+    </div>
+
+    <form onsubmit="doSetup(event)" id="setupForm">
+
+      <!-- Tab 1: Basic -->
+      <div class="tab-content active" id="tab0">
+        <div class="form-group">
+          <label class="form-label">Contraseña de administrador</label>
+          <div class="pw-wrap"><input class="form-input" type="password" name="admin_password" placeholder="Contraseña para /admin" value="huntprice2024"><button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1">👁️</button></div>
+          <div class="form-hint">Usarás esto para acceder al panel de administración</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Intervalo de escaneo (minutos)</label>
+          <input class="form-input" type="number" name="scan_interval" value="15" min="5" max="120">
+          <div class="form-hint">Cada cuántos minutos revisar las tiendas (recomendado: 15)</div>
+        </div>
+        <div class="switch-row">
+          <div class="switch-info">
+            <h4>Modo Demo</h4>
+            <p>Usar datos de ejemplo en lugar de scraping real</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" name="demo_mode" id="demoToggle" checked onchange="updateDemoHint()">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+        <div id="demoHint" style="margin-top:12px;background:rgba(0,204,102,0.1);border:1px solid rgba(0,204,102,0.3);padding:12px;border-radius:8px;font-size:12px;color:var(--green)">
+          ✅ Modo demo activado: verás 25 productos de ejemplo sin necesitar configurar scrapers.
+        </div>
+        <button type="button" class="btn-primary" onclick="nextTab()" style="margin-top:20px">Siguiente →</button>
+      </div>
+
+      <!-- Tab 2: Email -->
+      <div class="tab-content" id="tab1">
+        <div style="background:rgba(255,102,0,0.08);border:1px solid rgba(255,102,0,0.2);padding:12px;border-radius:8px;font-size:12px;color:var(--text2);margin-bottom:20px">
+          💡 Necesitas una <strong style="color:var(--orange)">Contraseña de Aplicación de Gmail</strong> (no tu contraseña normal). Ve a: Mi cuenta Google → Seguridad → Verificación en 2 pasos → Contraseñas de aplicación.
+        </div>
+        <div class="form-group">
+          <label class="form-label">Gmail</label>
+          <input class="form-input" type="email" name="gmail_user" placeholder="tu@gmail.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contraseña de Aplicación</label>
+          <div class="pw-wrap"><input class="form-input" type="password" name="gmail_app_password" placeholder="xxxx xxxx xxxx xxxx"><button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1">👁️</button></div>
+          <div class="form-hint">16 caracteres sin espacios</div>
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:20px">
+          Si dejas vacío, las notificaciones por email estarán desactivadas.
+        </div>
+        <div style="display:flex;gap:10px">
+          <button type="button" class="btn-sm orange" onclick="prevTab()">← Atrás</button>
+          <button type="button" class="btn-primary" onclick="nextTab()" style="flex:1">Siguiente →</button>
+        </div>
+      </div>
+
+      <!-- Tab 3: WhatsApp -->
+      <div class="tab-content" id="tab2">
+        <div style="background:rgba(0,204,102,0.08);border:1px solid rgba(0,204,102,0.2);padding:12px;border-radius:8px;font-size:12px;color:var(--text2);margin-bottom:20px">
+          💡 Necesitas una cuenta de <strong style="color:var(--green)">Twilio</strong> (twilio.com). Regístrate gratis y activa el Sandbox de WhatsApp en la consola.
+        </div>
+        <div class="form-group">
+          <label class="form-label">Twilio Account SID</label>
+          <input class="form-input" name="twilio_sid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Twilio Auth Token</label>
+          <input class="form-input" type="password" name="twilio_token" placeholder="Tu auth token">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Número From (Sandbox)</label>
+          <input class="form-input" name="twilio_from" placeholder="+14155238886" value="+14155238886">
+          <div class="form-hint">Número del sandbox de Twilio WhatsApp</div>
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:20px">
+          Si dejas vacío, las notificaciones por WhatsApp estarán desactivadas.
+        </div>
+        <div style="display:flex;gap:10px">
+          <button type="button" class="btn-sm orange" onclick="prevTab()">← Atrás</button>
+          <button type="submit" class="btn-primary" id="submitBtn" style="flex:1">🚀 ¡Iniciar HuntPrice!</button>
+        </div>
+      </div>
+
+    </form>
+
+    <div id="setupSuccess" style="display:none;text-align:center;padding:20px">
+      <div style="font-size:64px;margin-bottom:16px">🎉</div>
+      <h2 style="font-size:24px;font-weight:800;margin-bottom:8px">¡Listo!</h2>
+      <p style="color:var(--text2);margin-bottom:24px">HuntPrice Perú está configurado y listo para cazar ofertas.</p>
+      <a href="/" class="btn-primary" style="display:inline-block;padding:14px 40px">Ver ofertas →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  function togglePw(btn) {
+    const input = btn.parentElement.querySelector('input');
+    const isText = input.type === 'text';
+    input.type = isText ? 'password' : 'text';
+    btn.textContent = isText ? '👁️' : '🙈';
+  }
+
+  let currentTab = 0;
+
+  function switchTab(n) {
+    document.querySelectorAll('.tab-content').forEach((t,i) => t.classList.toggle('active', i === n));
+    document.querySelectorAll('.setup-tab').forEach((t,i) => t.classList.toggle('active', i === n));
+    currentTab = n;
+  }
+
+  function nextTab() { if (currentTab < 2) switchTab(currentTab + 1); }
+  function prevTab() { if (currentTab > 0) switchTab(currentTab - 1); }
+
+  function updateDemoHint() {
+    const demo = document.getElementById('demoToggle').checked;
+    document.getElementById('demoHint').style.display = demo ? 'block' : 'none';
+  }
+
+  async function doSetup(event) {
+    event.preventDefault();
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Configurando...';
+
+    const form = new FormData(event.target);
+    const body = {};
+    for (const [k,v] of form.entries()) body[k] = v;
+    body.demo_mode = document.getElementById('demoToggle').checked;
+
+    try {
+      const res = await fetch('/api/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+
+      document.getElementById('setupForm').style.display = 'none';
+      document.querySelectorAll('.setup-tabs, .setup-logo').forEach(el => el.style.display = 'none');
+      document.getElementById('setupSuccess').style.display = 'block';
+
+      setTimeout(() => { window.location.href = '/'; }, 3000);
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = '🚀 ¡Iniciar HuntPrice!';
+      alert('Error: ' + e.message);
+    }
+  }
+</script>
+</body>
+</html>

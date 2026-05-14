@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HuntPrice Perú 🔥 - Monitor de Ofertas Flash</title>
+  <meta name="description" content="Monitoreo en tiempo real de ofertas flash y descuentos extremos de Falabella, Ripley, Oechsle, Sodimac, Promart y PlazaVea">
+  <meta name="theme-color" content="#FF6600">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<!-- ─── Navbar ─────────────────────────────────────────────────────────────── -->
+<nav class="navbar">
+  <div class="navbar-brand">
+    <div class="logo-icon">🔥</div>
+    Hunt<span>Price</span>&nbsp;Perú
+  </div>
+  <div class="navbar-right">
+    <div class="live-badge">
+      <span class="live-dot"></span>
+      EN VIVO
+    </div>
+    <button class="btn-icon" onclick="openModal('alertModal')" title="Suscribirse a alertas">🔔</button>
+    <button class="btn-icon" id="themeToggle" onclick="toggleTheme()" title="Cambiar tema">☀️</button>
+    <span id="profileNavBtn"></span>
+    <a href="/manual.html" class="btn-icon" title="Manual de uso">📖</a>
+    <a href="/admin" class="btn-icon" title="Panel admin">⚙️</a>
+  </div>
+</nav>
+
+<!-- ─── Hero ──────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-inner">
+    <h1>Las mejores <span class="highlight">ofertas flash</span><br>de Perú en un solo lugar</h1>
+    <p>Monitoreamos Falabella, Ripley, Oechsle, Sodimac, Promart, PlazaVea, Mercado Libre, Coolbox y Samsung cada 15 minutos</p>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="statTotal">-</div>
+        <div class="stat-label">Productos</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statActive">-</div>
+        <div class="stat-label">Activas ahora</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statTopOffer">-</div>
+        <div class="stat-label">Mejor descuento</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statUsers">-</div>
+        <div class="stat-label">Suscritos</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Main ───────────────────────────────────────────────────────────────── -->
+<div class="main-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-title">🎯 Filtros</div>
+
+    <!-- Tiendas -->
+    <div class="filter-group">
+      <span class="filter-label">Tiendas</span>
+      <div class="filter-chips">
+        <button class="chip" data-store="Falabella" onclick="filterStore('Falabella')">Falabella</button>
+        <button class="chip" data-store="Ripley" onclick="filterStore('Ripley')">Ripley</button>
+        <button class="chip" data-store="Oechsle" onclick="filterStore('Oechsle')">Oechsle</button>
+        <button class="chip" data-store="Sodimac" onclick="filterStore('Sodimac')">Sodimac</button>
+        <button class="chip" data-store="Promart" onclick="filterStore('Promart')">Promart</button>
+        <button class="chip" data-store="PlazaVea" onclick="filterStore('PlazaVea')">PlazaVea</button>
+        <button class="chip" data-store="Mercado Libre" onclick="filterStore('Mercado Libre')">Mercado Libre</button>
+        <button class="chip" data-store="Coolbox" onclick="filterStore('Coolbox')">Coolbox</button>
+        <button class="chip" data-store="Samsung" onclick="filterStore('Samsung')">Samsung</button>
+      </div>
+    </div>
+
+    <!-- Categorías -->
+    <div class="filter-group">
+      <span class="filter-label">Categorías</span>
+      <div class="filter-chips" id="categoryFilters">
+        <!-- Loaded dynamically -->
+      </div>
+    </div>
+
+    <!-- Descuento mínimo -->
+    <div class="filter-group">
+      <div class="range-value">
+        <span>Descuento mínimo</span>
+        <strong id="discountValue">0%</strong>
+      </div>
+      <input type="range" id="discountSlider" min="0" max="100" step="10" value="0">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:4px">
+        <span>0%</span><span>30%</span><span>50%</span><span>70%</span><span>100%</span>
+      </div>
+    </div>
+
+    <!-- Precio máximo -->
+    <div class="filter-group">
+      <span class="filter-label">Precio máximo (S/.)</span>
+      <input type="number" class="filter-input" id="maxPriceInput" placeholder="Ej: 500" min="0">
+    </div>
+
+    <button class="btn-reset" onclick="resetFilters()">✕ Limpiar filtros</button>
+
+    <!-- Quick filters -->
+    <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
+      <div class="filter-label">Filtros rápidos</div>
+      <div class="filter-chips" style="flex-direction:column;gap:6px">
+        <button class="chip" onclick="quickFilter(50)" style="text-align:left">🔥 Más de 50% off</button>
+        <button class="chip" onclick="quickFilter(70)" style="text-align:left">💥 Más de 70% off</button>
+        <button class="chip" onclick="quickFilter(90)" style="text-align:left">🚨 Más de 90% off</button>
+        <button class="chip" onclick="quickFilter(95)" style="text-align:left">💎 Más de 95% off</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Products Section -->
+  <section class="products-section">
+    <div class="products-toolbar">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="search" id="searchInput" placeholder="Buscar producto..." oninput="handleSearch(this.value)">
+      </div>
+      <select class="sort-select" id="sortSelect" onchange="updateSort(this.value)">
+        <option value="newest" selected>Novedades</option>
+        <option value="price_updated">Más recientes</option>
+        <option value="discount">Mayor descuento</option>
+        <option value="price">Precio más bajo</option>
+        <option value="urgency">Más urgente</option>
+      </select>
+      <div class="view-toggle">
+        <button class="view-btn active" data-view="grid" onclick="setView('grid')" title="Vista mosaico">⊞</button>
+        <button class="view-btn" data-view="list" onclick="setView('list')" title="Vista lista">☰</button>
+      </div>
+      <span class="results-count" id="resultsCount">Cargando...</span>
+    </div>
+
+    <!-- Top Exclusivos -->
+    <section class="exclusivos-section" id="exclusivosSection" style="display:none">
+      <div class="exclusivos-header">
+        <span class="exclusivos-title">🔥 Top Exclusivas del Momento</span>
+        <span class="exclusivos-sub">Mayor ahorro real en soles</span>
+      </div>
+      <div class="exclusivos-cards" id="exclusivosCards"></div>
+    </section>
+
+    <div class="products-grid" id="productsGrid">
+      <!-- Products rendered here -->
+    </div>
+
+    <div class="load-more">
+      <button class="btn-load-more" id="loadMoreBtn" style="display:none" onclick="loadProducts(false)">
+        Cargar más ofertas
+      </button>
+    </div>
+  </section>
+</div>
+
+<!-- ─── Footer ─────────────────────────────────────────────────────────────── -->
+<footer>
+  <p>🔥 HuntPrice Perú &mdash; Monitor automático de precios · Actualizado cada 15 min</p>
+  <p style="margin-top:6px">
+    <a href="/admin">Admin</a> &nbsp;·&nbsp;
+    <button onclick="openModal('alertModal')" style="background:none;border:none;color:var(--orange);cursor:pointer;font-size:12px">Suscribirse</button>
+  </p>
+</footer>
+
+<!-- ─── Modals ─────────────────────────────────────────────────────────────── -->
+
+<!-- Alert/Register Modal -->
+<div class="modal-overlay" id="alertModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🔔 Recibir Alertas</h2>
+      <button class="modal-close" onclick="closeModal('alertModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:20px">
+        Regístrate y recibe alertas por email y WhatsApp cuando aparezcan ofertas que te interesan.
+      </p>
+      <form onsubmit="registerUser(event)">
+        <div class="form-group">
+          <label class="form-label">Nombre *</label>
+          <input class="form-input" name="name" placeholder="Tu nombre" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email *</label>
+          <input class="form-input" type="email" name="email" placeholder="tu@email.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">WhatsApp (opcional)</label>
+          <input class="form-input" name="whatsapp" placeholder="+51987654321">
+          <div class="form-hint">Formato: +51 seguido de 9 dígitos</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Descuento mínimo que te interesa: <strong id="modalDiscountVal">30%</strong></label>
+          <input type="range" name="min_discount" min="10" max="100" step="10" value="30"
+            oninput="document.getElementById('modalDiscountVal').textContent=this.value+'%'" style="width:100%;accent-color:var(--orange)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Categorías de interés</label>
+          <div class="checkboxes" id="catCheckboxes">
+            <label class="checkbox-label"><input type="checkbox" value="Electrónica">📺 Electrónica</label>
+            <label class="checkbox-label"><input type="checkbox" value="Computación">💻 Computación</label>
+            <label class="checkbox-label"><input type="checkbox" value="Celulares">📱 Celulares</label>
+            <label class="checkbox-label"><input type="checkbox" value="Electrohogar">🏠 Electrohogar</label>
+            <label class="checkbox-label"><input type="checkbox" value="Moda">👗 Moda</label>
+            <label class="checkbox-label"><input type="checkbox" value="Calzado">👟 Calzado</label>
+            <label class="checkbox-label"><input type="checkbox" value="Muebles">🛋️ Muebles</label>
+            <label class="checkbox-label"><input type="checkbox" value="Deportes">⚽ Deportes</label>
+            <label class="checkbox-label"><input type="checkbox" value="Juguetes">🧸 Juguetes</label>
+            <label class="checkbox-label"><input type="checkbox" value="Belleza">💄 Belleza</label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tiendas preferidas</label>
+          <div class="checkboxes" id="storeCheckboxes">
+            <label class="checkbox-label"><input type="checkbox" value="Falabella">Falabella</label>
+            <label class="checkbox-label"><input type="checkbox" value="Ripley">Ripley</label>
+            <label class="checkbox-label"><input type="checkbox" value="Oechsle">Oechsle</label>
+            <label class="checkbox-label"><input type="checkbox" value="Sodimac">Sodimac</label>
+            <label class="checkbox-label"><input type="checkbox" value="Promart">Promart</label>
+            <label class="checkbox-label"><input type="checkbox" value="PlazaVea">PlazaVea</label>
+            <label class="checkbox-label"><input type="checkbox" value="Mercado Libre">Mercado Libre</label>
+            <label class="checkbox-label"><input type="checkbox" value="Coolbox">Coolbox</label>
+            <label class="checkbox-label"><input type="checkbox" value="Samsung">Samsung</label>
+          </div>
+        </div>
+        <button type="submit" class="btn-primary">🔔 ¡Suscribirme gratis!</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Product Alert Modal -->
+<div class="modal-overlay" id="productAlertModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🔔 Activar Alerta de Precio</h2>
+      <button class="modal-close" onclick="closeModal('productAlertModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="alertProductInfo"></div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:20px">
+        Ingresa tu email y te avisamos cuando el precio baje de tu objetivo.
+      </p>
+      <form onsubmit="submitProductAlert(event)" id="productAlertForm" autocomplete="on">
+        <div class="form-group">
+          <label class="form-label">Tu email *</label>
+          <input class="form-input" type="email" name="email" placeholder="tu@email.com"
+            autocomplete="email" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">
+            Precio objetivo (S/.)
+            <span style="font-weight:400;color:var(--text3)"> — opcional</span>
+          </label>
+          <input class="form-input" type="number" name="target_price" id="alertTargetPrice"
+            placeholder="0.00" step="0.01" min="0">
+          <div class="form-hint" id="alertPriceHint">
+            Deja vacío para recibir cualquier cambio de precio
+          </div>
+        </div>
+        <button type="submit" class="btn-primary" id="productAlertSubmitBtn">
+          🔔 Crear alerta
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Product Detail Modal -->
+<div class="modal-overlay" id="productModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📦 Detalle del producto</h2>
+      <button class="modal-close" onclick="closeModal('productModal')">✕</button>
+    </div>
+    <div class="modal-body" id="productModalBody">
+    </div>
+  </div>
+</div>
+
+<!-- ─── Toast Container ─────────────────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ─── Confetti ─────────────────────────────────────────────────────────────── -->
+<canvas id="confetti-canvas" style="display:none"></canvas>
+
+<!-- ─── HuntBot Chatbot ──────────────────────────────────────────────────────── -->
+<style>
+.chatbot-btn { position:fixed; bottom:24px; right:24px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,var(--orange),#cc4400); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:24px; box-shadow:0 4px 20px rgba(255,102,0,.5); z-index:1000; transition:transform .2s,box-shadow .2s; }
+.chatbot-btn:hover { transform:scale(1.1); box-shadow:0 6px 28px rgba(255,102,0,.7); }
+.chatbot-btn .badge { position:absolute; top:-2px; right:-2px; background:var(--red); color:#fff; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; display:none; }
+.chat-panel { position:fixed; bottom:92px; right:24px; width:360px; max-width:calc(100vw - 32px); background:var(--card); border:1px solid var(--border); border-radius:18px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.5); z-index:999; display:flex; flex-direction:column; max-height:500px; transform:scale(.9) translateY(20px); opacity:0; pointer-events:none; transition:all .25s cubic-bezier(.175,.885,.32,1.275); }
+.chat-panel.open { transform:scale(1) translateY(0); opacity:1; pointer-events:all; }
+.chat-header { background:linear-gradient(135deg,rgba(255,102,0,.15),rgba(255,102,0,.05)); border-bottom:1px solid var(--border); padding:14px 16px; display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.chat-avatar { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,var(--orange),#cc4400); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+.chat-messages { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; min-height:120px; }
+.chat-msg { max-width:82%; padding:10px 14px; border-radius:14px; font-size:13px; line-height:1.5; animation:fadeIn .2s; }
+.chat-msg.user { background:linear-gradient(135deg,var(--orange),#cc4400); color:#fff; border-radius:14px 14px 4px 14px; align-self:flex-end; }
+.chat-msg.bot { background:var(--bg3); color:var(--text1); border-radius:14px 14px 14px 4px; align-self:flex-start; border:1px solid var(--border); }
+.chat-msg.typing { background:var(--bg3); border:1px solid var(--border); align-self:flex-start; border-radius:14px 14px 14px 4px; padding:12px 16px; }
+.typing-dots { display:flex; gap:5px; align-items:center; }
+.typing-dots span { width:7px; height:7px; background:var(--text3); border-radius:50%; animation:typingBounce 1.2s infinite; }
+.typing-dots span:nth-child(2) { animation-delay:.2s; }
+.typing-dots span:nth-child(3) { animation-delay:.4s; }
+@keyframes typingBounce { 0%,60%,100% { transform:translateY(0); } 30% { transform:translateY(-6px); } }
+@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+.chat-input-area { border-top:1px solid var(--border); padding:12px; display:flex; gap:8px; flex-shrink:0; }
+.chat-input-area input { flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:22px; padding:9px 14px; font-size:13px; color:var(--text1); outline:none; transition:.2s; }
+.chat-input-area input:focus { border-color:var(--orange); }
+.chat-send-btn { width:38px; height:38px; border-radius:50%; background:var(--orange); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; transition:.15s; }
+.chat-send-btn:hover { background:#cc4400; }
+.chat-send-btn:disabled { opacity:.5; cursor:not-allowed; }
+.chat-suggestions { padding:6px 14px 10px; display:flex; gap:6px; flex-wrap:wrap; flex-shrink:0; }
+.chat-suggestion { background:var(--bg3); border:1px solid var(--border); border-radius:20px; padding:5px 10px; font-size:11px; color:var(--text2); cursor:pointer; transition:.15s; white-space:nowrap; }
+.chat-suggestion:hover { border-color:var(--orange); color:var(--orange); }
+/* ── Chat product mini-card ── */
+.chat-product-card { display:flex; gap:10px; background:var(--bg2); border:1px solid var(--border); border-radius:12px; overflow:hidden; max-width:100%; margin-top:4px; }
+.cpc-img { width:72px; min-width:72px; height:72px; object-fit:contain; background:var(--bg3); }
+.cpc-body { flex:1; padding:8px 10px 8px 0; min-width:0; }
+.cpc-store { font-size:10px; font-weight:700; color:var(--orange); text-transform:uppercase; letter-spacing:.5px; }
+.cpc-name { font-size:12px; font-weight:600; line-height:1.4; color:var(--text1); overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; margin:2px 0 4px; }
+.cpc-prices { display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; }
+.cpc-orig { font-size:11px; color:var(--text3); text-decoration:line-through; }
+.cpc-curr { font-size:15px; font-weight:900; color:var(--green-bright); }
+.cpc-badge { display:inline-block; background:var(--red); color:#fff; font-size:10px; font-weight:700; border-radius:4px; padding:1px 5px; margin-top:2px; }
+.cpc-actions { display:flex; gap:6px; margin-top:6px; }
+.cpc-btn-buy { flex:1; text-align:center; background:var(--orange); color:#fff; border:none; border-radius:7px; padding:5px 8px; font-size:11px; font-weight:700; cursor:pointer; text-decoration:none; }
+.cpc-btn-buy:hover { background:#cc4400; }
+.cpc-btn-alert { background:var(--bg3); border:1px solid var(--border); border-radius:7px; padding:5px 8px; font-size:11px; cursor:pointer; color:var(--text2); white-space:nowrap; }
+.cpc-btn-alert:hover { border-color:var(--orange); color:var(--orange); }
+/* ── Dashboard highlight pulse ── */
+@keyframes pulseHighlight { 0%,100% { box-shadow:0 0 0 0 rgba(255,102,0,.7); border-color:var(--orange); } 50% { box-shadow:0 0 0 10px rgba(255,102,0,0); border-color:var(--orange); } }
+.product-card.highlighted { animation:pulseHighlight 1s ease-in-out 4; border:2px solid var(--orange) !important; }
+</style>
+
+<!-- Chatbot button -->
+<button class="chatbot-btn" id="chatbotBtn" onclick="toggleChat()" title="HuntBot - Asistente IA">
+  🤖
+  <span class="badge" id="chatBadge">1</span>
+</button>
+
+<!-- Chat panel -->
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-header">
+    <div class="chat-avatar">🤖</div>
+    <div style="flex:1">
+      <div style="font-size:14px;font-weight:700">HuntBot</div>
+      <div style="font-size:11px;color:var(--text2)">Asistente de ofertas · IA</div>
+    </div>
+    <button onclick="toggleChat()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;padding:4px">✕</button>
+  </div>
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-msg bot">¡Hola! Soy HuntBot 👋 Estoy aquí para ayudarte a encontrar las mejores ofertas y tomar decisiones de compra inteligentes. ¿En qué puedo ayudarte?</div>
+  </div>
+  <div class="chat-suggestions" id="chatSuggestions">
+    <button class="chat-suggestion" onclick="sendChatSuggestion(this.textContent)">¿Hay tablets con +50% off?</button>
+    <button class="chat-suggestion" onclick="sendChatSuggestion(this.textContent)">Mejor oferta en celulares</button>
+    <button class="chat-suggestion" onclick="sendChatSuggestion(this.textContent)">¿Vale la pena esperar?</button>
+  </div>
+  <div class="chat-input-area">
+    <input type="text" id="chatInput" placeholder="Pregúntame sobre ofertas..." onkeydown="if(event.key==='Enter')sendChat()">
+    <button class="chat-send-btn" id="chatSendBtn" onclick="sendChat()">➤</button>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+  // Enable checkbox styling
+  document.querySelectorAll('.checkbox-label').forEach(label => {
+    label.querySelector('input')?.addEventListener('change', function() {
+      label.classList.toggle('checked', this.checked);
+    });
+  });
+
+  function quickFilter(pct) {
+    const slider = document.getElementById('discountSlider');
+    if (slider) { slider.value = pct; document.getElementById('discountValue').textContent = pct + '%'; }
+    updateDiscount(pct);
+  }
+</script>
+
+<!-- PWA Install -->
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "name": "HuntPrice Perú",
+  "short_name": "HuntPrice",
+  "description": "Monitor de ofertas flash de tiendas peruanas",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0d0d",
+  "theme_color": "#FF6600",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%23FF6600'/><text y='140' x='20' font-size='140'>🔥</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["shopping", "utilities"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Ver ofertas",
+      "url": "/",
+      "description": "Dashboard principal de ofertas"
+    },
+    {
+      "name": "Admin",
+      "url": "/admin",
+      "description": "Panel de administración"
+    }
+  ]
+}

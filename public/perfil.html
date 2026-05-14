@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mi Perfil – HuntPrice Perú</title>
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    .perfil-header { background: linear-gradient(135deg,#1a0800,#0d0d0d); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; align-items:center; gap:14px; }
+    .perfil-content { max-width:700px; margin:0 auto; padding:28px 16px 80px; }
+    .perfil-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin-bottom:20px; }
+    .section-label { font-size:14px; font-weight:700; color:var(--orange); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+    .listbox { display:flex; flex-wrap:wrap; gap:8px; }
+    .listbox-item { padding:7px 14px; border-radius:20px; border:1.5px solid var(--border); cursor:pointer; font-size:13px; background:var(--bg3); transition:.15s; user-select:none; }
+    .listbox-item.selected { border-color:var(--orange); background:rgba(255,102,0,.12); color:var(--orange); font-weight:600; }
+    .listbox-item:hover { border-color:var(--orange); }
+    .double-range { position:relative; height:24px; margin:12px 0 6px; }
+    .double-range input[type=range] { position:absolute; width:100%; -webkit-appearance:none; appearance:none; height:4px; background:transparent; outline:none; pointer-events:none; top:50%; transform:translateY(-50%); }
+    .double-range input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:var(--orange); cursor:pointer; pointer-events:all; border:2px solid var(--bg); box-shadow:0 1px 4px rgba(0,0,0,.4); }
+    .double-range input[type=range]::-moz-range-thumb { width:18px; height:18px; border-radius:50%; background:var(--orange); cursor:pointer; pointer-events:all; border:2px solid var(--bg); }
+    .range-track { position:absolute; top:50%; transform:translateY(-50%); width:100%; height:4px; background:var(--border); border-radius:2px; }
+    .range-track-fill { position:absolute; height:4px; background:var(--orange); border-radius:2px; top:0; }
+    .range-labels { display:flex; justify-content:space-between; font-size:11px; color:var(--text3); margin-top:4px; }
+    .range-values { display:flex; justify-content:space-between; font-size:13px; font-weight:700; color:var(--text1); margin-bottom:8px; }
+    .toggle-row { display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid var(--border); }
+    .toggle-row:last-child { border-bottom:none; }
+    .toggle-info { flex:1; }
+    .toggle-info h4 { font-size:14px; font-weight:600; margin:0 0 2px; }
+    .toggle-info p { font-size:12px; color:var(--text2); margin:0; }
+    .no-user { text-align:center; padding:60px 20px; }
+    .no-user h2 { font-size:22px; margin-bottom:12px; }
+    .no-user p { color:var(--text2); margin-bottom:24px; }
+    .profile-avatar { width:60px; height:60px; border-radius:50%; background:linear-gradient(135deg,var(--orange),#cc4400); display:flex; align-items:center; justify-content:center; font-size:28px; flex-shrink:0; }
+  </style>
+</head>
+<body>
+
+<div class="perfil-header">
+  <a href="/" style="color:var(--text2);font-size:20px;text-decoration:none">←</a>
+  <div class="profile-avatar">👤</div>
+  <div style="flex:1">
+    <div style="font-size:18px;font-weight:800">Mi Perfil</div>
+    <div style="font-size:12px;color:var(--text2)" id="profileEmail">Cargando...</div>
+  </div>
+  <button onclick="doLogout()" style="background:none;border:1px solid #444;color:#aaa;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px">🚪 Cerrar sesión</button>
+</div>
+
+<div class="perfil-content">
+
+  <!-- No-user state -->
+  <div class="no-user" id="noUserState" style="display:none">
+    <div style="font-size:56px;margin-bottom:16px">🔐</div>
+    <h2>Inicia sesión primero</h2>
+    <p>Regístrate en el dashboard para acceder a tu perfil y personalizar tus preferencias.</p>
+    <a href="/" class="btn-primary" style="display:inline-block;text-decoration:none">Ir al Dashboard</a>
+  </div>
+
+  <!-- Profile form -->
+  <div id="profileForm" style="display:none">
+
+    <!-- Categorías de interés -->
+    <div class="perfil-card">
+      <div class="section-label">📋 Categorías de interés</div>
+      <p style="font-size:12px;color:var(--text2);margin:0 0 14px">Selecciona las categorías que más te interesan. El dashboard mostrará estas primero.</p>
+      <div class="listbox" id="categoriesListbox"></div>
+    </div>
+
+    <!-- Rango de precio -->
+    <div class="perfil-card">
+      <div class="section-label">💰 Rango de precio (S/.)</div>
+      <div class="range-values">
+        <span>Mínimo: <strong id="minPriceLabel">S/. 0</strong></span>
+        <span>Máximo: <strong id="maxPriceLabel">S/. 10,000</strong></span>
+      </div>
+      <div class="double-range" id="priceRangeWrapper">
+        <div class="range-track"><div class="range-track-fill" id="priceTrack"></div></div>
+        <input type="range" id="priceMin" min="0" max="10000" step="50" value="0">
+        <input type="range" id="priceMax" min="0" max="10000" step="50" value="10000">
+      </div>
+      <div class="range-labels"><span>S/. 0</span><span>S/. 2,500</span><span>S/. 5,000</span><span>S/. 10,000</span></div>
+    </div>
+
+    <!-- Rango de descuento -->
+    <div class="perfil-card">
+      <div class="section-label">🏷️ Rango de descuento (%)</div>
+      <div class="range-values">
+        <span>Mínimo: <strong id="minDiscLabel">0%</strong></span>
+        <span>Máximo: <strong id="maxDiscLabel">100%</strong></span>
+      </div>
+      <div class="double-range" id="discRangeWrapper">
+        <div class="range-track"><div class="range-track-fill" id="discTrack"></div></div>
+        <input type="range" id="discMin" min="0" max="100" step="5" value="0">
+        <input type="range" id="discMax" min="0" max="100" step="5" value="100">
+      </div>
+      <div class="range-labels"><span>0%</span><span>30%</span><span>50%</span><span>70%</span><span>100%</span></div>
+    </div>
+
+    <!-- Notificaciones -->
+    <div class="perfil-card">
+      <div class="section-label">🔔 Notificaciones</div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <h4>📧 Notificaciones por Email</h4>
+          <p>Recibe alertas de ofertas en tu correo electrónico</p>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="notifyEmail" checked>
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <h4>💬 Notificaciones por WhatsApp</h4>
+          <p>Recibe alertas por WhatsApp (requiere número registrado)</p>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="notifyWhatsapp">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Guardar -->
+    <button class="btn-primary" onclick="saveProfile()" id="saveBtn" style="width:100%;font-size:16px;padding:14px">
+      💾 Guardar cambios
+    </button>
+
+    <div style="margin-top:16px;text-align:center">
+      <button onclick="applyProfileToFilters()" style="background:none;border:none;color:var(--orange);cursor:pointer;font-size:13px;text-decoration:underline">
+        Aplicar perfil al dashboard ahora
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+const CATEGORIES = [
+  { id: 'Televisores', icon: '📺' },
+  { id: 'Tablets', icon: '📱' },
+  { id: 'Laptops', icon: '💻' },
+  { id: 'Celulares', icon: '📲' },
+  { id: 'Audífonos', icon: '🎧' },
+  { id: 'Zapatillas', icon: '👟' },
+  { id: 'Ropa', icon: '👕' },
+  { id: 'Electrohogar', icon: '🏠' },
+  { id: 'Herramientas', icon: '🔧' },
+  { id: 'Juguetes', icon: '🧸' },
+  { id: 'Perfumes', icon: '🌸' },
+  { id: 'Deportes', icon: '⚽' },
+  { id: 'Gaming', icon: '🎮' },
+  { id: 'Refrigeradoras', icon: '🧊' },
+  { id: 'Lavadoras', icon: '🫧' }
+];
+
+function doLogout() {
+  localStorage.clear();
+  sessionStorage.clear();
+  window.location.href = '/';
+}
+
+let userToken = localStorage.getItem('hp_token') || '';
+let profileData = {};
+
+document.addEventListener('DOMContentLoaded', () => {
+  buildCategoriesListbox();
+  setupDoubleRange('priceMin', 'priceMax', 'priceTrack', 'minPriceLabel', 'maxPriceLabel',
+    v => 'S/. ' + Number(v).toLocaleString('es-PE'));
+  setupDoubleRange('discMin', 'discMax', 'discTrack', 'minDiscLabel', 'maxDiscLabel',
+    v => v + '%');
+
+  if (!userToken) {
+    document.getElementById('noUserState').style.display = 'block';
+    document.getElementById('profileEmail').textContent = 'No registrado';
+  } else {
+    document.getElementById('profileForm').style.display = 'block';
+    loadProfile();
+  }
+});
+
+function buildCategoriesListbox() {
+  const container = document.getElementById('categoriesListbox');
+  container.innerHTML = CATEGORIES.map(c =>
+    `<div class="listbox-item" data-cat="${c.id}" onclick="toggleCategory(this)">${c.icon} ${c.id}</div>`
+  ).join('');
+}
+
+function toggleCategory(el) {
+  el.classList.toggle('selected');
+}
+
+async function loadProfile() {
+  try {
+    const res = await fetch(`/api/profile/${userToken}`);
+    const json = await res.json();
+    if (!json.ok) { showToast('❌', 'Error', json.error); return; }
+    const u = json.data;
+    profileData = u;
+
+    document.getElementById('profileEmail').textContent = u.email || '';
+
+    // Categorías seleccionadas
+    const cats = JSON.parse(u.categories || '[]');
+    document.querySelectorAll('.listbox-item').forEach(el => {
+      el.classList.toggle('selected', cats.includes(el.dataset.cat));
+    });
+
+    // Rango precio
+    document.getElementById('priceMin').value = u.min_price || 0;
+    document.getElementById('priceMax').value = u.max_budget || 10000;
+    updateDoubleRange('priceMin', 'priceMax', 'priceTrack', 'minPriceLabel', 'maxPriceLabel',
+      v => 'S/. ' + Number(v).toLocaleString('es-PE'));
+
+    // Rango descuento
+    document.getElementById('discMin').value = u.min_discount || 0;
+    document.getElementById('discMax').value = (u.max_discount != null ? u.max_discount : 100);
+    updateDoubleRange('discMin', 'discMax', 'discTrack', 'minDiscLabel', 'maxDiscLabel',
+      v => v + '%');
+
+    // Notificaciones
+    document.getElementById('notifyEmail').checked = u.notify_email !== 0;
+    document.getElementById('notifyWhatsapp').checked = u.notify_whatsapp === 1;
+  } catch (e) {
+    showToast('❌', 'Error al cargar perfil', e.message);
+  }
+}
+
+async function saveProfile() {
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Guardando...';
+
+  const categories = [...document.querySelectorAll('.listbox-item.selected')].map(el => el.dataset.cat);
+  const minPrice = parseInt(document.getElementById('priceMin').value) || 0;
+  const maxBudget = parseInt(document.getElementById('priceMax').value) || 0;
+  const minDiscount = parseInt(document.getElementById('discMin').value) || 0;
+  const maxDiscount = parseInt(document.getElementById('discMax').value) || 100;
+  const notifyEmail = document.getElementById('notifyEmail').checked;
+  const notifyWhatsapp = document.getElementById('notifyWhatsapp').checked;
+
+  try {
+    const res = await fetch(`/api/profile/${userToken}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories, stores: [], min_price: minPrice, max_budget: maxBudget,
+        min_discount: minDiscount, max_discount: maxDiscount, notify_email: notifyEmail,
+        notify_whatsapp: notifyWhatsapp })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+
+    // Guardar preferencias en localStorage para filtrar el dashboard
+    localStorage.setItem('hp_profile', JSON.stringify({
+      categories, min_price: minPrice, max_budget: maxBudget,
+      min_discount: minDiscount, max_discount: maxDiscount
+    }));
+
+    showToast('✅', '¡Perfil guardado!', 'Tus preferencias han sido actualizadas', 'success');
+  } catch (e) {
+    showToast('❌', 'Error', e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar cambios';
+  }
+}
+
+function applyProfileToFilters() {
+  const cats = [...document.querySelectorAll('.listbox-item.selected')].map(el => el.dataset.cat);
+  const minDiscount = parseInt(document.getElementById('discMin').value) || 0;
+  const maxBudget = parseInt(document.getElementById('priceMax').value) || 0;
+  localStorage.setItem('hp_profile', JSON.stringify({
+    categories: cats,
+    min_price: parseInt(document.getElementById('priceMin').value) || 0,
+    max_budget: maxBudget,
+    min_discount: minDiscount,
+    max_discount: parseInt(document.getElementById('discMax').value) || 100
+  }));
+  window.location.href = '/?fromProfile=1';
+}
+
+// ── Double Range Slider ───────────────────────────────────────────────────────
+function setupDoubleRange(minId, maxId, trackId, minLabelId, maxLabelId, fmt) {
+  const minEl = document.getElementById(minId);
+  const maxEl = document.getElementById(maxId);
+  const update = () => updateDoubleRange(minId, maxId, trackId, minLabelId, maxLabelId, fmt);
+  minEl.addEventListener('input', () => {
+    if (parseInt(minEl.value) >= parseInt(maxEl.value)) minEl.value = parseInt(maxEl.value) - parseInt(minEl.step || 1);
+    update();
+  });
+  maxEl.addEventListener('input', () => {
+    if (parseInt(maxEl.value) <= parseInt(minEl.value)) maxEl.value = parseInt(minEl.value) + parseInt(minEl.step || 1);
+    update();
+  });
+  update();
+}
+
+function updateDoubleRange(minId, maxId, trackId, minLabelId, maxLabelId, fmt) {
+  const minEl = document.getElementById(minId);
+  const maxEl = document.getElementById(maxId);
+  const track = document.getElementById(trackId);
+  const min = parseFloat(minEl.value);
+  const max = parseFloat(maxEl.value);
+  const range = parseFloat(minEl.max) - parseFloat(minEl.min);
+  const left = ((min - parseFloat(minEl.min)) / range) * 100;
+  const right = ((parseFloat(maxEl.max) - max) / range) * 100;
+  track.style.left = left + '%';
+  track.style.right = right + '%';
+  document.getElementById(minLabelId).textContent = fmt(min);
+  document.getElementById(maxLabelId).textContent = fmt(max);
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(icon, title, body, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  const id = 'toast_' + Date.now();
+  const colors = { info: 'var(--orange)', success: 'var(--green)', error: 'var(--red)' };
+  container.insertAdjacentHTML('beforeend', `
+    <div id="${id}" class="toast" style="border-left-color:${colors[type]||colors.info}">
+      <span class="toast-icon">${icon}</span>
+      <div class="toast-content">
+        <div class="toast-title">${title}</div>
+        <div class="toast-body">${body}</div>
+      </div>
+      <button class="toast-close" onclick="document.getElementById('${id}').remove()">✕</button>
+    </div>`);
+  setTimeout(() => document.getElementById(id)?.remove(), 5000);
+}
+</script>
+</body>
+</html>
