@@ -636,8 +636,9 @@ function getProductsForChat(limit = 200) {
 function searchProductsByKeyword(keywords, limit = 100) {
   const d = getDb();
   if (!keywords || keywords.length === 0) return [];
-  const conditions = keywords.map(() => 'LOWER(p.name) LIKE ?').join(' OR ');
-  const likeParams = keywords.map(k => `%${k.toLowerCase()}%`);
+  // Pad the name with spaces and search for ' term ' so 'tab' never matches 'tabla'
+  const conditions = keywords.map(() => "(' ' || LOWER(p.name) || ' ') LIKE ?").join(' OR ');
+  const likeParams = keywords.map(k => `% ${k.toLowerCase()} %`);
   return d.prepare(`
     SELECT p.id, p.store, p.name, p.category, p.url, p.image_url,
            pr.current_price, pr.original_price, pr.discount_percent,

@@ -34,7 +34,7 @@ const SYNONYM_MAP = {
   'television': ['tv','smart tv','qled','oled','pantalla'],
   'audifonos':  ['auricular','earphone','headphone','tws','airpods','bluetooth'],
   'auricular':  ['audifonos','earphone','headphone','tws'],
-  'tablet':     ['ipad','tab','slate'],
+  'tablet':     ['ipad', 'galaxy tab', 'lenovo tab', 'huawei matepad'],
   'moto':       ['motocicleta','scooter'],
   'refrigerador': ['refrigeradora','nevera','heladera'],
   'lavadora':   ['lavasecadora','lavarropa'],
@@ -504,9 +504,9 @@ NOTIFICACIONES — MUY IMPORTANTE:
 - Solo añade [[NOTIF:...]] cuando el usuario lo pida explícitamente
 
 INSTRUCCIÓN CRÍTICA Y OBLIGATORIA — CONTROL DEL BUSCADOR:
-- Siempre que recomiendes un producto o respondas a una búsqueda del usuario, DEBES incluir al final de tu mensaje una etiqueta oculta con el término de búsqueda más preciso y corto (1 o 2 palabras) que identifique al producto en el catálogo.
+- Siempre que recomiendes un producto o respondas a una búsqueda del usuario, DEBES incluir al final de tu mensaje una etiqueta oculta con el término de búsqueda más preciso que identifique al producto en el catálogo.
 - Usa el formato exacto: [BUSCAR: termino] (ejemplo: [BUSCAR: cuatrimoto] o [BUSCAR: ipad]).
-- Si el usuario busca una cuatrimoto a batería, pon [BUSCAR: cuatrimoto]. Si busca un iPad, pon [BUSCAR: ipad].
+- El término DEBE ser preciso y no ambiguo: usa el nombre completo del producto o categoría. NUNCA uses abreviaciones cortas que puedan coincidir con otras categorías (ej: NO pon [BUSCAR: tab] — usa [BUSCAR: tablet] o [BUSCAR: galaxy tab]; NO pon [BUSCAR: tv] — usa [BUSCAR: televisor]).
 - Si tu respuesta es una comparativa general sin recomendación específica, omite la etiqueta.`;
 
     // Construir historial en formato Gemini (role: user/model)
@@ -1099,7 +1099,19 @@ app.post('/api/search/smart', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY || db.getConfig('gemini_api_key');
     if (apiKey) {
       try {
-        const prompt = `Dado el término de búsqueda del usuario, devuelve un array JSON con palabras clave (sinónimos, marcas, variantes) que ayuden a encontrar productos en una base de datos de tiendas peruanas (Falabella, Ripley, Sodimac, etc.). Devuelve SOLO un array JSON de strings, sin explicación. Máximo 12 términos. Término: "${q}"`;
+        const prompt = `Eres el motor semántico de un buscador de tiendas peruanas (Falabella, Ripley, Oechsle, Sodimac). El usuario puede escribir con errores ortográficos o abreviaciones.
+
+Tu tarea: dado el término del usuario, devuelve un array JSON de palabras clave para buscar esos productos.
+
+REGLAS OBLIGATORIAS:
+1. Corrige errores ortográficos — el primer elemento debe ser el término corregido (ej: "tavlet" → "tablet").
+2. Incluye marcas y modelos conocidos en Perú (ej: para "tablet" → "ipad", "galaxy tab", "lenovo tab").
+3. Incluye variantes de nombre (con/sin tilde, singular/plural).
+4. NO incluyas abreviaciones ambiguas de raíz corta que puedan coincidir con otras categorías (ej: NO pongas "tab" solo — coincide con "tabla de picar"; en su lugar pon "galaxy tab" o "lenovo tab").
+5. NO mezcles categorías: si el término es tecnología, excluye productos de Hogar, Cocina u otras categorías no tecnológicas.
+6. Máximo 12 términos. Devuelve SOLO el array JSON, sin explicación ni texto adicional.
+
+Término del usuario: "${q}"`;
         const body = JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { maxOutputTokens: 200, temperature: 0.1 }
