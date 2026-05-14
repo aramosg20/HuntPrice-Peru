@@ -795,6 +795,11 @@ function renderChatLocked(messagesEl) {
       <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Debe registrarse para empezar a interactuar con el agente</div>
       <button class="btn-primary" style="width:100%;font-size:13px"
         onclick="toggleChat();openModal('registerModal')">Registrarse gratis</button>
+      <p style="margin-top:12px;font-size:12px;color:var(--text3)">
+        ¿Ya tienes cuenta?
+        <button style="background:none;border:none;color:var(--orange);font-size:12px;cursor:pointer;padding:0;text-decoration:underline"
+          onclick="toggleChat();openModal('loginModal')">Ingresa aquí</button>
+      </p>
     </div>`;
   setChatInputEnabled(false);
 }
