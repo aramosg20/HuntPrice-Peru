@@ -7,7 +7,7 @@ const { notifyUsers } = require('../notifications/email');
 const { notifyWhatsApp } = require('../notifications/whatsapp');
 
 const scrapers = [
-  require('./falabella'),
+  require('./falabellaPlaywright'),
   require('./ripley'),
   require('./oechsle'),
   require('./sodimac'),
