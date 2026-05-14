@@ -50,29 +50,46 @@ const USER_AGENTS = [
 ];
 
 // ── Mandatory categories ───────────────────────────────────────────────────────
-// Scanned in BOTH modes. Fast mode uses ONLY this list (skips discovery).
+// All paths use /collection/ slugs — Falabella redirects /category/cat629XXXX/
+// (root-level IDs) to the home page as an anti-bot measure; /collection/ and
+// deeper /category/catXXXXX/ (non-root IDs) are stable.
+// Fast mode scans ONLY this list; full mode merges it with dynamic discovery.
 const MANDATORY_PATHS = [
-  // Deal hubs
+  // ── Deals & promotions (always reliable) ───────────────────────────────────
   '/falabella-pe/collection/descuentos',
   '/falabella-pe/collection/descuentos-cmr',
-  // Main macro-categories (verified IDs)
-  '/falabella-pe/category/cat6290005/Tecnologia',
-  '/falabella-pe/category/cat6290004/Electrohogar',
-  '/falabella-pe/category/cat6290001/Moda',
-  '/falabella-pe/category/cat6290007/Muebles-y-Deco',
-  '/falabella-pe/category/cat6290008/Deportes',
-  '/falabella-pe/category/cat6290009/Mundo-Bebe',
-  '/falabella-pe/category/cat6290002/Belleza',
-  '/falabella-pe/category/cat6290006/Computacion',
-  // High-value sub-areas
-  '/falabella-pe/category/cat6290003/Ninos',
-  '/falabella-pe/category/cat6290010/Hogar',
-  '/falabella-pe/collection/dormitorio',
-  '/falabella-pe/collection/mundo-bebe',
+  // ── Tecnología ─────────────────────────────────────────────────────────────
+  '/falabella-pe/collection/celulares-y-smartphones',
+  '/falabella-pe/collection/laptops-y-computadoras',
+  '/falabella-pe/collection/tablets',
+  '/falabella-pe/collection/television',
+  '/falabella-pe/collection/audio',
+  '/falabella-pe/collection/gaming',
+  // ── Electrohogar ───────────────────────────────────────────────────────────
+  '/falabella-pe/collection/refrigeradoras',
+  '/falabella-pe/collection/lavadoras',
+  '/falabella-pe/collection/microondas',
+  '/falabella-pe/collection/aspiradoras',
+  // ── Moda ───────────────────────────────────────────────────────────────────
+  '/falabella-pe/collection/zapatillas',
+  '/falabella-pe/collection/ropa-mujer',
+  '/falabella-pe/collection/ropa-hombre',
+  '/falabella-pe/collection/ropa-ninos',
+  // ── Hogar y muebles ────────────────────────────────────────────────────────
   '/falabella-pe/collection/muebles',
-  '/falabella-pe/collection/organizacion',
+  '/falabella-pe/collection/dormitorio',
   '/falabella-pe/collection/colchones',
+  '/falabella-pe/collection/organizacion',
+  '/falabella-pe/collection/cocina',
+  // ── Mundo Bebé (paths confirmados) ─────────────────────────────────────────
+  '/falabella-pe/collection/mundo-bebe',
   '/falabella-pe/collection/comodas-y-cambiadores',
+  '/falabella-pe/collection/carriolas-y-cochecitos',
+  '/falabella-pe/collection/cunas-y-camas-bebe',
+  // ── Otros ──────────────────────────────────────────────────────────────────
+  '/falabella-pe/collection/belleza',
+  '/falabella-pe/collection/deportes',
+  '/falabella-pe/collection/herramientas',
 ];
 
 // ── Resource blocking ──────────────────────────────────────────────────────────
@@ -113,10 +130,25 @@ async function scrape(mode = 'fast') {
     });
 
     const context = await browser.newContext({
-      userAgent: pickUa(),
-      locale:    'es-PE',
-      viewport:  { width: 1280, height: 800 },
+      userAgent:  pickUa(),
+      locale:     'es-PE',
+      timezoneId: 'America/Lima',
+      viewport:   { width: 1280, height: 800 },
+      extraHTTPHeaders: {
+        'Accept-Language': 'es-PE,es;q=0.9,en;q=0.8',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'sec-ch-ua-platform': '"Windows"',
+      },
     });
+
+    // Peru localisation cookies — Falabella redirects to home when it
+    // cannot determine the visitor's country from cookies/headers.
+    await context.addCookies([
+      { name: 'userLocation',      value: 'PE',    domain: '.falabella.com.pe', path: '/' },
+      { name: 'locale',            value: 'es_PE', domain: '.falabella.com.pe', path: '/' },
+      { name: 'region',            value: 'PE',    domain: '.falabella.com.pe', path: '/' },
+      { name: 'currentStoreSlug',  value: 'falabella-pe', domain: '.falabella.com.pe', path: '/' },
+    ]);
 
     // Fast mode skips discovery and uses the known-good mandatory list directly,
     // saving one extra homepage navigation per cron run.
@@ -206,7 +238,16 @@ async function discoverCategories(context) {
   return MANDATORY_PATHS;
 }
 
-/** Walk known key paths in __NEXT_DATA__ looking for nav/category arrays (3 levels deep). */
+/**
+ * Walk the nav tree in __NEXT_DATA__ collecting category paths (3 levels).
+ *
+ * Key insight: Falabella redirects /category/cat629XXXX/ (root IDs, L1 items
+ * that have children) to the home page. Subcategory IDs (L2/L3 items) work
+ * fine. So we SKIP L1 items that have children and only collect:
+ *   - L1 leaf items (no children → they are the terminal node of that branch)
+ *   - All L2 items (children of L1) regardless of whether they have children
+ *   - All L3 items (grandchildren)
+ */
 function navPathsFromNextData(nd) {
   if (!nd) return [];
   const paths    = [];
@@ -221,13 +262,16 @@ function navPathsFromNextData(nd) {
   for (const root of navRoots) {
     if (!Array.isArray(root)) continue;
     for (const item of root) {
-      const p = toPathname(item?.url || item?.path || item?.href || '');
-      if (isValidCategoryPath(p)) paths.push(p);
       const children = item?.children || item?.subcategories || [];
+      if (children.length === 0) {
+        // L1 leaf — safe (no children means it's a specific-enough category)
+        const p = toPathname(item?.url || item?.path || item?.href || '');
+        if (isValidCategoryPath(p)) paths.push(p);
+      }
+      // Always include L2 and L3 — subcategory IDs never redirect to home
       for (const child of children) {
         const cp = toPathname(child?.url || child?.path || '');
         if (isValidCategoryPath(cp)) paths.push(cp);
-        // Level 3: e.g. Mundo Bebé → Dormitorio Bebé → Cómodas y Cambiadores
         for (const grand of child?.children || child?.subcategories || []) {
           const gp = toPathname(grand?.url || grand?.path || '');
           if (isValidCategoryPath(gp)) paths.push(gp);
@@ -273,6 +317,24 @@ async function scrapeCategory(context, categoryUrl, seen, maxPagesPerCat, mode) 
   try {
     // ── Page 1: full navigation ─────────────────────────────────────────────
     await page.goto(categoryUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+    // ── Anti-home redirect guard ────────────────────────────────────────────
+    // Falabella silently redirects root /category/cat629XXXX/ IDs to the
+    // homepage as an anti-bot measure. Detect and bail out immediately so we
+    // never waste time parsing the home page's __NEXT_DATA__.
+    {
+      const landedUrl  = page.url();
+      const homePaths  = [`${BASE}/falabella-pe`, `${BASE}/falabella-pe/`, BASE, `${BASE}/`];
+      const isHome     = homePaths.includes(landedUrl.split('?')[0]);
+      const isRedirect = !landedUrl.includes('/category/') && !landedUrl.includes('/collection/');
+      if (isHome || isRedirect) {
+        console.warn(
+          `[${STORE}] Redirigido al Home — saltando ${new URL(categoryUrl).pathname} ` +
+          `(URL final: ${landedUrl.slice(0, 70)})`
+        );
+        return products;
+      }
+    }
 
     // /category/ pages hydrate the product grid client-side after SSR.
     // Wait up to 8 s for any recognisable pod element before reading the DOM.
