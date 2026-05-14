@@ -14,7 +14,10 @@ const state = {
   alertedProducts: new Set(JSON.parse(localStorage.getItem('hp_alerts') || '[]')),
   theme: localStorage.getItem('hp_theme') || 'dark',
   evtSource: null,
-  streamSource: null
+  streamSource: null,
+  // ── Auth ──
+  authToken: localStorage.getItem('hp_auth_token') || null,
+  authUser:  JSON.parse(localStorage.getItem('hp_auth_user') || 'null'),
 };
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
@@ -29,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSSE();
   initStream();
   initUI();
-  updateProfileNavBtn();
+  initAuth();        // verify stored JWT and update navbar
 });
 
 // ─── Theme ─────────────────────────────────────────────────────────────────────
@@ -765,12 +768,54 @@ function toggleChat() {
   if (panel) panel.classList.toggle('open', chatOpen);
   const badge = document.getElementById('chatBadge');
   if (badge) badge.style.display = 'none';
+
   if (chatOpen) {
-    setTimeout(() => {
-      const input = document.getElementById('chatInput');
-      if (input) input.focus();
-    }, 300);
+    const messages = document.getElementById('chatMessages');
+    if (messages && !messages.children.length) {
+      // Render initial greeting (personalized if authed)
+      if (state.authUser) {
+        messages.innerHTML = `<div class="chat-msg bot">¡Hola, <strong>${escHtml(state.authUser.username)}</strong>! 👋 Soy HuntBot, estoy listo para ayudarte a encontrar las mejores ofertas. ¿En qué te puedo ayudar hoy?</div>`;
+        setChatInputEnabled(true);
+      } else {
+        renderChatLocked(messages);
+      }
+    }
+    if (state.authUser) {
+      setTimeout(() => document.getElementById('chatInput')?.focus(), 300);
+    }
   }
+}
+
+function renderChatLocked(messagesEl) {
+  const el = messagesEl || document.getElementById('chatMessages');
+  if (el) el.innerHTML = `
+    <div class="chat-locked-msg">
+      <div class="lock-icon">🔒</div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:6px">Solo para miembros</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Debe registrarse para empezar a interactuar con el agente</div>
+      <button class="btn-primary" style="width:100%;font-size:13px"
+        onclick="toggleChat();openModal('registerModal')">Registrarse gratis</button>
+    </div>`;
+  setChatInputEnabled(false);
+}
+
+function setChatInputEnabled(enabled) {
+  const input   = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('chatSendBtn');
+  const suggs   = document.getElementById('chatSuggestions');
+  if (input)   { input.disabled = !enabled; input.placeholder = enabled ? 'Pregúntame sobre ofertas...' : 'Regístrate para chatear...'; }
+  if (sendBtn) sendBtn.disabled = !enabled;
+  if (suggs)   suggs.style.display = enabled ? '' : 'none';
+}
+
+function resetChatForAuth() {
+  chatOpen = false;
+  chatHistory = [];
+  const panel = document.getElementById('chatPanel');
+  if (panel) panel.classList.remove('open');
+  const messages = document.getElementById('chatMessages');
+  if (messages) messages.innerHTML = '';
+  setChatInputEnabled(!!state.authUser);
 }
 
 function sendChatSuggestion(text) {
@@ -780,6 +825,7 @@ function sendChatSuggestion(text) {
 }
 
 async function sendChat() {
+  if (!state.authUser) { openModal('registerModal'); return; }
   const input = document.getElementById('chatInput');
   const sendBtn = document.getElementById('chatSendBtn');
   const messages = document.getElementById('chatMessages');
@@ -1145,37 +1191,181 @@ function scrollChatToBottom() {
   if (el) el.scrollTop = el.scrollHeight;
 }
 
-// Renderiza el estado de sesión en el navbar: avatar si hay sesión, botón "Ingresar" si no
 function updateProfileNavBtn() {
   const container = document.getElementById('profileNavBtn');
   if (!container) return;
-
-  const token = localStorage.getItem('hp_token');
-
-  if (token) {
-    const profile = JSON.parse(localStorage.getItem('hp_profile') || 'null');
-    const name = profile?.name || '';
-    const initial = name ? name.charAt(0).toUpperCase() : '';
-    container.innerHTML = initial
-      ? `<a href="/perfil.html" title="Mi perfil — ${escHtml(name)}"
-           style="display:inline-flex;align-items:center;justify-content:center;
-                  width:32px;height:32px;border-radius:50%;
-                  background:var(--orange);color:#fff;
-                  font-weight:800;font-size:14px;text-decoration:none;flex-shrink:0"
-         >${escHtml(initial)}</a>`
-      : `<a href="/perfil.html" class="btn-icon" title="Mi perfil"
-           style="display:inline-flex">👤</a>`;
+  const u = state.authUser;
+  if (u) {
+    const initial = (u.username || '?').charAt(0).toUpperCase();
+    container.innerHTML = `
+      <div class="user-nav-wrap">
+        <button class="user-avatar-btn" id="userAvatarBtn" onclick="toggleUserDropdown()" title="${escHtml(u.username)}">${escHtml(initial)}</button>
+        <div class="user-dropdown" id="userDropdown">
+          <div class="user-dropdown-header">
+            <div class="user-dropdown-name">${escHtml(u.username)}</div>
+            <div class="user-dropdown-email">${escHtml(u.email)}</div>
+            ${u.phone ? `<div class="user-dropdown-phone">🇵🇪 +51 ${escHtml(u.phone)}</div>` : ''}
+          </div>
+          <button class="user-dropdown-item" onclick="doLogout()">🚪 Cerrar sesión</button>
+          <button class="user-dropdown-item danger" onclick="confirmDeleteAccount()">🗑️ Darse de baja</button>
+        </div>
+      </div>`;
+    // Close dropdown on outside click
+    setTimeout(() => {
+      document.addEventListener('click', outsideDropdownHandler, { once: false });
+    }, 10);
   } else {
-    container.innerHTML =
-      `<button onclick="openModal('alertModal')" title="Suscribirse o ingresar"
-         style="display:inline-flex;align-items:center;gap:5px;
-                border:1px solid var(--orange);border-radius:20px;
-                padding:5px 11px;background:rgba(255,102,0,.08);
-                color:var(--orange);font-size:12px;font-weight:600;
-                cursor:pointer;white-space:nowrap;line-height:1">
-         👤 Ingresar
-       </button>`;
+    container.innerHTML = `
+      <button class="btn-auth-outline" onclick="openModal('loginModal')">Ingresar</button>
+      <button class="btn-auth-fill"    onclick="openModal('registerModal')">Registrarse</button>`;
+    document.removeEventListener('click', outsideDropdownHandler);
   }
+}
+
+function outsideDropdownHandler(e) {
+  const wrap = document.querySelector('.user-nav-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('userDropdown')?.classList.remove('open');
+  }
+}
+
+function toggleUserDropdown() {
+  document.getElementById('userDropdown')?.classList.toggle('open');
+}
+
+// ─── Auth ──────────────────────────────────────────────────────────────────────
+
+async function initAuth() {
+  if (!state.authToken) { updateProfileNavBtn(); return; }
+  try {
+    const res  = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${state.authToken}` } });
+    const json = await res.json();
+    if (json.ok) {
+      state.authUser = json.user;
+      localStorage.setItem('hp_auth_user', JSON.stringify(json.user));
+    } else {
+      clearAuth();
+    }
+  } catch (_) { /* keep cached user if offline */ }
+  updateProfileNavBtn();
+}
+
+function clearAuth() {
+  state.authToken = null;
+  state.authUser  = null;
+  localStorage.removeItem('hp_auth_token');
+  localStorage.removeItem('hp_auth_user');
+}
+
+async function doLogin(event) {
+  event.preventDefault();
+  const btn = document.getElementById('loginSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Ingresando...';
+  const form = new FormData(event.target);
+  try {
+    const res  = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email:       form.get('email'),
+        password:    form.get('password'),
+        remember_me: form.get('remember_me') === 'on'
+      })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Error al ingresar');
+    state.authToken = json.token;
+    state.authUser  = json.user;
+    localStorage.setItem('hp_auth_token', json.token);
+    localStorage.setItem('hp_auth_user',  JSON.stringify(json.user));
+    closeModal('loginModal');
+    updateProfileNavBtn();
+    showToast('👋', `¡Hola, ${json.user.username}!`, 'Sesión iniciada correctamente', 'success');
+    resetChatForAuth();
+  } catch (e) {
+    showToast('❌', 'Error al ingresar', e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Ingresar';
+  }
+}
+
+async function doRegister(event) {
+  event.preventDefault();
+  const btn = document.getElementById('registerSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Creando cuenta...';
+  const form = new FormData(event.target);
+  try {
+    const res  = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username:         form.get('username'),
+        email:            form.get('email'),
+        confirm_email:    form.get('confirm_email'),
+        password:         form.get('password'),
+        confirm_password: form.get('confirm_password'),
+        phone:            form.get('phone')
+      })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Error al registrar');
+    state.authToken = json.token;
+    state.authUser  = json.user;
+    localStorage.setItem('hp_auth_token', json.token);
+    localStorage.setItem('hp_auth_user',  JSON.stringify(json.user));
+    closeModal('registerModal');
+    updateProfileNavBtn();
+    showToast('🎉', '¡Cuenta creada!', json.message || '¡Bienvenido a HuntPrice!', 'success');
+    resetChatForAuth();
+  } catch (e) {
+    showToast('❌', 'Error al registrar', e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Crear cuenta gratis';
+  }
+}
+
+function doLogout() {
+  clearAuth();
+  document.getElementById('userDropdown')?.classList.remove('open');
+  updateProfileNavBtn();
+  showToast('👋', 'Sesión cerrada', 'Hasta pronto', 'info');
+  resetChatForAuth();
+}
+
+async function confirmDeleteAccount() {
+  document.getElementById('userDropdown')?.classList.remove('open');
+  const confirmed = confirm('Qué pena que nos deje, pero esperamos que vuelva pronto.\n\n¿Deseas dar de baja tu cuenta permanentemente?');
+  if (!confirmed) return;
+  try {
+    const res  = await fetch('/api/auth/account', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${state.authToken}` }
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+    clearAuth();
+    updateProfileNavBtn();
+    showToast('😢', 'Cuenta dada de baja', 'Esperamos verte pronto', 'info');
+    resetChatForAuth();
+  } catch (e) {
+    showToast('❌', 'Error', e.message, 'error');
+  }
+}
+
+function showForgotPassword() {
+  showToast('📧', 'Recuperar contraseña', 'Escríbenos a soporte@huntprice.pe para recuperar tu acceso', 'info');
+}
+
+function togglePwVisible(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isText = input.type === 'text';
+  input.type = isText ? 'password' : 'text';
+  btn.textContent = isText ? '👁️' : '🙈';
 }
 
 // ─── View Toggle ───────────────────────────────────────────────────────────────
@@ -1219,3 +1409,11 @@ window.showChatContactForm = showChatContactForm;
 window.highlightDashboardProduct = highlightDashboardProduct;
 window.sendChatSuggestion = sendChatSuggestion;
 window.setView = setView;
+// auth
+window.doLogin = doLogin;
+window.doRegister = doRegister;
+window.doLogout = doLogout;
+window.confirmDeleteAccount = confirmDeleteAccount;
+window.toggleUserDropdown = toggleUserDropdown;
+window.showForgotPassword = showForgotPassword;
+window.togglePwVisible = togglePwVisible;

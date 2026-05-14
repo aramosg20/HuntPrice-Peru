@@ -9,6 +9,43 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
   <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    /* ── Auth navbar ── */
+    .btn-auth-outline{border:1px solid var(--orange);border-radius:20px;padding:5px 13px;background:rgba(255,102,0,.08);color:var(--orange);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:.2s}
+    .btn-auth-outline:hover{background:rgba(255,102,0,.18)}
+    .btn-auth-fill{border:none;border-radius:20px;padding:5px 13px;background:var(--orange);color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:.2s}
+    .btn-auth-fill:hover{background:#cc4400}
+    /* ── User avatar + dropdown ── */
+    .user-nav-wrap{position:relative}
+    .user-avatar-btn{width:34px;height:34px;border-radius:50%;background:var(--orange);color:#fff;font-weight:800;font-size:15px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.2s;flex-shrink:0}
+    .user-avatar-btn:hover{background:#cc4400;transform:scale(1.05)}
+    .user-dropdown{position:absolute;top:42px;right:0;background:var(--card);border:1px solid var(--border);border-radius:14px;min-width:200px;box-shadow:0 8px 32px rgba(0,0,0,.45);z-index:200;overflow:hidden;display:none}
+    .user-dropdown.open{display:block}
+    .user-dropdown-header{padding:14px 16px;border-bottom:1px solid var(--border)}
+    .user-dropdown-name{font-weight:700;font-size:14px;color:var(--text1)}
+    .user-dropdown-email,.user-dropdown-phone{font-size:11px;color:var(--text3);margin-top:2px}
+    .user-dropdown-item{display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:var(--text1);font-size:13px;cursor:pointer;transition:.15s}
+    .user-dropdown-item:hover{background:var(--bg3);color:var(--orange)}
+    .user-dropdown-item.danger{color:var(--red)}
+    .user-dropdown-item.danger:hover{background:rgba(255,51,51,.08);color:var(--red)}
+    /* ── Auth modals ── */
+    .auth-modal{max-width:400px;width:100%}
+    .auth-divider{display:flex;align-items:center;gap:10px;margin:18px 0;color:var(--text3);font-size:12px}
+    .auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+    .auth-link{color:var(--orange);cursor:pointer;background:none;border:none;font-size:13px;padding:0;text-decoration:underline}
+    .auth-link:hover{color:#cc4400}
+    .pw-field{position:relative}
+    .pw-field .form-input{padding-right:40px}
+    .pw-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:15px;color:var(--text3);padding:2px;line-height:1}
+    .pw-toggle:hover{color:var(--orange)}
+    .phone-field{display:flex;align-items:center;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg3);transition:.2s}
+    .phone-field:focus-within{border-color:var(--orange)}
+    .phone-prefix{padding:0 10px;font-size:18px;line-height:1;flex-shrink:0;border-right:1px solid var(--border);height:100%;display:flex;align-items:center;gap:4px;color:var(--text2);font-size:13px;font-weight:600;background:var(--bg2);min-height:40px}
+    .phone-field input{flex:1;background:transparent;border:none;padding:10px 12px;font-size:14px;color:var(--text1);outline:none}
+    /* ── Chat locked state ── */
+    .chat-locked-msg{text-align:center;padding:24px 16px}
+    .chat-locked-msg .lock-icon{font-size:36px;margin-bottom:10px}
+  </style>
 </head>
 <body>
 
@@ -287,6 +324,106 @@
   </div>
 </div>
 
+<!-- ─── Modal: Ingresar ─────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal auth-modal">
+    <div class="modal-header">
+      <h2>👤 Ingresar</h2>
+      <button class="modal-close" onclick="closeModal('loginModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="loginForm" onsubmit="doLogin(event)" autocomplete="on" novalidate>
+        <div class="form-group">
+          <label class="form-label">Correo electrónico</label>
+          <input class="form-input" type="email" name="email" id="loginEmail"
+            placeholder="tu@email.com" autocomplete="email" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contraseña</label>
+          <div class="pw-field">
+            <input class="form-input" type="password" name="password" id="loginPassword"
+              placeholder="••••••••" autocomplete="current-password" required>
+            <button type="button" class="pw-toggle" onclick="togglePwVisible('loginPassword',this)">👁️</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text2)">
+            <input type="checkbox" name="remember_me" id="loginRemember" style="accent-color:var(--orange)">
+            Recordarme
+          </label>
+          <button type="button" class="auth-link" onclick="showForgotPassword()">¿Olvidaste tu contraseña?</button>
+        </div>
+        <button type="submit" class="btn-primary" id="loginSubmitBtn" style="width:100%">Ingresar</button>
+      </form>
+      <div class="auth-divider">o</div>
+      <p style="text-align:center;font-size:13px;color:var(--text2)">
+        ¿No tienes cuenta?
+        <button class="auth-link" onclick="closeModal('loginModal');openModal('registerModal')">Regístrate aquí</button>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Modal: Registrarse ──────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="registerModal">
+  <div class="modal auth-modal">
+    <div class="modal-header">
+      <h2>🚀 Crear cuenta</h2>
+      <button class="modal-close" onclick="closeModal('registerModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="registerForm" onsubmit="doRegister(event)" autocomplete="on" novalidate>
+        <div class="form-group">
+          <label class="form-label">Nombre de usuario *</label>
+          <input class="form-input" type="text" name="username" id="regUsername"
+            placeholder="Tu nombre" autocomplete="name" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Correo electrónico *</label>
+          <input class="form-input" type="email" name="email" id="regEmail"
+            placeholder="tu@email.com" autocomplete="email" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirmar correo *</label>
+          <input class="form-input" type="email" name="confirm_email" id="regConfirmEmail"
+            placeholder="tu@email.com" autocomplete="email" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contraseña * <span style="font-size:11px;color:var(--text3)">(mín. 8 caracteres)</span></label>
+          <div class="pw-field">
+            <input class="form-input" type="password" name="password" id="regPassword"
+              placeholder="••••••••" autocomplete="new-password" required>
+            <button type="button" class="pw-toggle" onclick="togglePwVisible('regPassword',this)">👁️</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirmar contraseña *</label>
+          <div class="pw-field">
+            <input class="form-input" type="password" name="confirm_password" id="regConfirmPassword"
+              placeholder="••••••••" autocomplete="new-password" required>
+            <button type="button" class="pw-toggle" onclick="togglePwVisible('regConfirmPassword',this)">👁️</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Celular * <span style="font-size:11px;color:var(--text3)">(9 dígitos, sin +51)</span></label>
+          <div class="phone-field">
+            <div class="phone-prefix">🇵🇪 +51</div>
+            <input type="tel" name="phone" id="regPhone"
+              placeholder="987654321" maxlength="9" inputmode="numeric"
+              oninput="this.value=this.value.replace(/\D/g,'')" required>
+          </div>
+        </div>
+        <button type="submit" class="btn-primary" id="registerSubmitBtn" style="width:100%;margin-top:8px">Crear cuenta gratis</button>
+      </form>
+      <div class="auth-divider">o</div>
+      <p style="text-align:center;font-size:13px;color:var(--text2)">
+        ¿Ya tienes cuenta?
+        <button class="auth-link" onclick="closeModal('registerModal');openModal('loginModal')">Ingresa aquí</button>
+      </p>
+    </div>
+  </div>
+</div>
+
 <!-- ─── Toast Container ─────────────────────────────────────────────────────── -->
 <div class="toast-container" id="toastContainer"></div>
 
@@ -359,7 +496,7 @@
     <button onclick="toggleChat()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;padding:4px">✕</button>
   </div>
   <div class="chat-messages" id="chatMessages">
-    <div class="chat-msg bot">¡Hola! Soy HuntBot 👋 Estoy aquí para ayudarte a encontrar las mejores ofertas y tomar decisiones de compra inteligentes. ¿En qué puedo ayudarte?</div>
+    <!-- greeting injected by app.js on open -->
   </div>
   <div class="chat-suggestions" id="chatSuggestions">
     <button class="chat-suggestion" onclick="sendChatSuggestion(this.textContent)">¿Hay tablets con +50% off?</button>
