@@ -26,18 +26,21 @@
 const { chromium } = require('playwright');
 const { cleanTitle, urlToSku, cleanScene7Url } = require('./utils');
 
-const STORE        = 'Falabella';
-const BASE         = 'https://www.falabella.com.pe';
-const MAX_PAGES    = 15;   // safety cap: pages per category
-const MAX_CATS     = 14;   // safety cap: categories total
-const MIN_DISCOUNT = 5;    // % — skip trivial deals
-const PAGE_SIZE    = 24;   // Falabella's default products-per-page
+const STORE           = 'Falabella';
+const BASE            = 'https://www.falabella.com.pe';
+const MAX_PAGES       = 15;  // safety cap: pages per category
+const MIN_DISCOUNT    = 5;   // % — skip trivial deals
+const PAGE_SIZE       = 24;  // Falabella's default products-per-page
+const CAT_CONCURRENCY = 3;   // categories scraped in parallel
 
-// ── Fallback seeds ────────────────────────────────────────────────────────────
-// Used when auto-discovery can't find nav links.
-const SEED_PATHS = [
+// ── Mandatory categories ──────────────────────────────────────────────────────
+// Always merged with dynamically-discovered paths so these areas can never
+// be dropped by a discovery failure or URL-pattern change.
+const MANDATORY_PATHS = [
+  // Deal hubs
   '/falabella-pe/collection/descuentos',
   '/falabella-pe/collection/descuentos-cmr',
+  // Main macro-categories (verified IDs)
   '/falabella-pe/category/cat6290005/Tecnologia',
   '/falabella-pe/category/cat6290004/Electrohogar',
   '/falabella-pe/category/cat6290001/Moda',
@@ -46,6 +49,15 @@ const SEED_PATHS = [
   '/falabella-pe/category/cat6290009/Mundo-Bebe',
   '/falabella-pe/category/cat6290002/Belleza',
   '/falabella-pe/category/cat6290006/Computacion',
+  // High-value sub-areas that get missed when discovery caps early
+  '/falabella-pe/category/cat6290003/Ninos',
+  '/falabella-pe/category/cat6290010/Hogar',
+  '/falabella-pe/collection/dormitorio',
+  '/falabella-pe/collection/mundo-bebe',
+  '/falabella-pe/collection/muebles',
+  '/falabella-pe/collection/organizacion',
+  '/falabella-pe/collection/colchones',
+  '/falabella-pe/collection/comodas-y-cambiadores',
 ];
 
 // ── Resource blocking ─────────────────────────────────────────────────────────
@@ -88,17 +100,27 @@ async function scrape() {
     const paths = await discoverCategories(context);
     console.log(`[${STORE}] ${paths.length} categorías a procesar`);
 
-    // Step 2 — scrape every category sequentially ──────────────────────────
-    for (const catPath of paths) {
-      const catUrl = BASE + catPath;
-      try {
-        const batch = await scrapeCategory(context, catUrl, seen);
-        products.push(...batch);
-        console.log(`[${STORE}] ${catPath} → ${batch.length} prods (acum. ${products.length})`);
-      } catch (err) {
-        console.error(`[${STORE}] Error en ${catPath}: ${err.message}`);
+    // Step 2 — scrape categories in batches of CAT_CONCURRENCY ─────────────
+    for (let i = 0; i < paths.length; i += CAT_CONCURRENCY) {
+      const chunk   = paths.slice(i, i + CAT_CONCURRENCY);
+      const settled = await Promise.allSettled(
+        chunk.map(catPath =>
+          scrapeCategory(context, BASE + catPath, seen)
+            .then(batch => ({ catPath, batch }))
+        )
+      );
+      for (const res of settled) {
+        if (res.status === 'fulfilled') {
+          const { catPath, batch } = res.value;
+          products.push(...batch);
+          console.log(`[${STORE}] ${catPath} → ${batch.length} prods (acum. ${products.length})`);
+        } else {
+          console.error(`[${STORE}] Error en categoría: ${res.reason?.message}`);
+        }
       }
-      await delay(2500 + Math.random() * 2000);
+      if (i + CAT_CONCURRENCY < paths.length) {
+        await delay(2000 + Math.random() * 1500);
+      }
     }
 
   } catch (err) {
@@ -134,15 +156,16 @@ async function discoverCategories(context) {
     const navPaths = navPathsFromNextData(nd);
     if (navPaths.length >= 4) {
       console.log(`[${STORE}] Discovery via __NEXT_DATA__: ${navPaths.length} paths`);
-      return dedupeAndCap(navPaths, MAX_CATS);
+      const merged = dedupe([...MANDATORY_PATHS, ...navPaths]);
+      console.log(`[${STORE}] Total tras fusión con obligatorias: ${merged.length} paths`);
+      return merged;
     }
 
     // Attempt B: crawl <a href> links in nav DOM ────────────────────────────
     const domPaths = await page.$$eval('a[href]', anchors =>
       anchors
         .map(a => a.getAttribute('href') || '')
-        .filter(h => h.includes('/category/') || h.includes('/collection/'))
-        .filter(h => !h.includes('/product/'))
+        .filter(h => (h.includes('/category/') || h.includes('/collection/')) && !h.includes('/product/'))
         .map(h => {
           try { return new URL(h, 'https://www.falabella.com.pe').pathname; }
           catch (_) { return h.startsWith('/') ? h : null; }
@@ -152,7 +175,9 @@ async function discoverCategories(context) {
 
     if (domPaths.length >= 2) {
       console.log(`[${STORE}] Discovery via DOM: ${domPaths.length} paths`);
-      return dedupeAndCap(domPaths, MAX_CATS);
+      const merged = dedupe([...MANDATORY_PATHS, ...domPaths]);
+      console.log(`[${STORE}] Total tras fusión con obligatorias: ${merged.length} paths`);
+      return merged;
     }
 
   } catch (err) {
@@ -161,8 +186,8 @@ async function discoverCategories(context) {
     try { await page.close(); } catch (_) {}
   }
 
-  console.warn(`[${STORE}] Discovery falló — usando seeds hardcodeados`);
-  return SEED_PATHS;
+  console.warn(`[${STORE}] Discovery falló — usando paths obligatorios`);
+  return MANDATORY_PATHS;
 }
 
 /** Walk known key paths in __NEXT_DATA__ looking for nav/category arrays. */
@@ -465,8 +490,8 @@ async function openPage(context) {
   return page;
 }
 
-function dedupeAndCap(paths, max) {
-  return [...new Set(paths)].slice(0, max);
+function dedupe(paths) {
+  return [...new Set(paths)];
 }
 
 function toPathname(href) {
