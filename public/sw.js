@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'huntprice-v1';
+const CACHE = 'hotprice-v2';
 const OFFLINE_ASSETS = ['/', '/css/styles.css', '/js/app.js', '/manifest.json'];
 
 // Install: cache static assets
@@ -60,7 +60,7 @@ self.addEventListener('fetch', event => {
 
 // Push notifications
 self.addEventListener('push', event => {
-  let data = { title: '🔥 HuntPrice Perú', body: 'Nueva oferta detectada!' };
+  let data = { title: '🔥 Hotprice Perú', body: '¡Caze detectó una oferta nueva!' };
   try { data = event.data.json(); } catch (_) {}
 
   event.waitUntil(

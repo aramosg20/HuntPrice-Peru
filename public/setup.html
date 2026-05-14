@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Configuración Inicial – HuntPrice Perú</title>
+  <title>Configuración Inicial – Hotprice Perú</title>
   <link rel="stylesheet" href="/css/styles.css">
   <style>
     .pw-wrap { position:relative; display:flex; align-items:center; }
@@ -33,7 +33,7 @@
       <div class="tab-content active" id="tab0">
         <div class="form-group">
           <label class="form-label">Contraseña de administrador</label>
-          <div class="pw-wrap"><input class="form-input" type="password" name="admin_password" placeholder="Contraseña para /admin" value="huntprice2024"><button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1">👁️</button></div>
+          <div class="pw-wrap"><input class="form-input" type="password" name="admin_password" placeholder="Contraseña para /admin" value="hotprice2024"><button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1">👁️</button></div>
           <div class="form-hint">Usarás esto para acceder al panel de administración</div>
         </div>
         <div class="form-group">
@@ -103,7 +103,7 @@
         </div>
         <div style="display:flex;gap:10px">
           <button type="button" class="btn-sm orange" onclick="prevTab()">← Atrás</button>
-          <button type="submit" class="btn-primary" id="submitBtn" style="flex:1">🚀 ¡Iniciar HuntPrice!</button>
+          <button type="submit" class="btn-primary" id="submitBtn" style="flex:1">🚀 ¡Iniciar Hotprice!</button>
         </div>
       </div>
 
@@ -112,7 +112,7 @@
     <div id="setupSuccess" style="display:none;text-align:center;padding:20px">
       <div style="font-size:64px;margin-bottom:16px">🎉</div>
       <h2 style="font-size:24px;font-weight:800;margin-bottom:8px">¡Listo!</h2>
-      <p style="color:var(--text2);margin-bottom:24px">HuntPrice Perú está configurado y listo para cazar ofertas.</p>
+      <p style="color:var(--text2);margin-bottom:24px">Hotprice Perú está configurado y listo para cazear ofertas.</p>
       <a href="/" class="btn-primary" style="display:inline-block;padding:14px 40px">Ver ofertas →</a>
     </div>
   </div>
@@ -169,7 +169,7 @@
       setTimeout(() => { window.location.href = '/'; }, 3000);
     } catch (e) {
       btn.disabled = false;
-      btn.textContent = '🚀 ¡Iniciar HuntPrice!';
+      btn.textContent = '🚀 ¡Iniciar Hotprice!';
       alert('Error: ' + e.message);
     }
   }

@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HuntPrice Perú 🔥 - Monitor de Ofertas Flash</title>
-  <meta name="description" content="Monitoreo en tiempo real de ofertas flash y descuentos extremos de Falabella, Ripley, Oechsle, Sodimac, Promart y PlazaVea">
-  <meta name="theme-color" content="#FF6600">
+  <title>Hotprice Perú | Tu radar de ofertas en tiempo real</title>
+  <meta name="description" content="Radar de ofertas en tiempo real de Falabella, Ripley, Oechsle, Sodimac, Promart, PlazaVea, Mercado Libre, Coolbox y Samsung">
+  <meta name="theme-color" content="#FF4500">
   <link rel="manifest" href="/manifest.json">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+  <link rel="icon" type="image/svg+xml" href="/assets/brand/favicon.svg">
   <link rel="stylesheet" href="/css/styles.css">
   <style>
     /* ── Auth navbar ── */
@@ -73,8 +73,8 @@
 <!-- ─── Navbar ─────────────────────────────────────────────────────────────── -->
 <nav class="navbar">
   <div class="navbar-brand">
-    <div class="logo-icon">🔥</div>
-    Hunt<span>Price</span>&nbsp;Perú
+    <div class="logo-icon"><img src="/assets/brand/hotprice-logo.svg" alt="Hotprice" style="width:22px;height:22px;object-fit:contain;"></div>
+    Hot<span>price</span>&nbsp;Perú
   </div>
   <div class="navbar-right">
     <div class="live-badge">
@@ -92,7 +92,7 @@
 <!-- ─── Hero ──────────────────────────────────────────────────────────────── -->
 <section class="hero">
   <div class="hero-inner">
-    <h1>Las mejores <span class="highlight">ofertas flash</span><br>de Perú en un solo lugar</h1>
+    <h1>Cazeamos las <span class="highlight">ofertas de Perú</span><br>por ti cada 15 minutos</h1>
     <p>Monitoreamos Falabella, Ripley, Oechsle, Sodimac, Promart, PlazaVea, Mercado Libre, Coolbox y Samsung cada 15 minutos</p>
     <div class="stats-grid">
       <div class="stat-card">
@@ -237,7 +237,7 @@
 
 <!-- ─── Footer ─────────────────────────────────────────────────────────────── -->
 <footer>
-  <p>🔥 HuntPrice Perú &mdash; Monitor automático de precios · Actualizado cada 15 min</p>
+  <p>🔥 Hotprice Perú &mdash; Radar automático de precios · Actualizado cada 15 min</p>
   <p style="margin-top:6px">
     <a href="/admin">Admin</a> &nbsp;·&nbsp;
     <button onclick="openAlertCenter()" style="background:none;border:none;color:var(--orange);cursor:pointer;font-size:12px">Preferencias</button>
@@ -609,10 +609,15 @@
 <!-- ─── Confetti ─────────────────────────────────────────────────────────────── -->
 <canvas id="confetti-canvas" style="display:none"></canvas>
 
-<!-- ─── HuntBot Chatbot ──────────────────────────────────────────────────────── -->
+<!-- ─── Caze Chatbot ────────────────────────────────────────────────────────── -->
 <style>
-.chatbot-btn { position:fixed; bottom:24px; right:24px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,var(--orange),#cc4400); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:24px; box-shadow:0 4px 20px rgba(255,102,0,.5); z-index:1000; transition:transform .2s,box-shadow .2s; }
-.chatbot-btn:hover { transform:scale(1.1); box-shadow:0 6px 28px rgba(255,102,0,.7); }
+@keyframes radarGlow {
+  0%,100% { box-shadow:0 4px 20px rgba(255,69,0,.5), 0 0 0 0 rgba(255,69,0,.35); }
+  50%      { box-shadow:0 4px 20px rgba(255,69,0,.5), 0 0 0 14px rgba(255,69,0,0); }
+}
+.radar-glow { animation:radarGlow 2s ease-in-out infinite; }
+.chatbot-btn { position:fixed; bottom:24px; right:24px; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,var(--color-primary),#cc2200); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:24px; box-shadow:0 4px 20px rgba(255,69,0,.5); z-index:1000; transition:transform .2s,box-shadow .2s; }
+.chatbot-btn:hover { transform:scale(1.1); box-shadow:0 6px 28px rgba(255,69,0,.7); }
 .chatbot-btn .badge { position:absolute; top:-2px; right:-2px; background:var(--red); color:#fff; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; display:none; }
 .chat-panel { position:fixed; bottom:92px; right:24px; width:360px; max-width:calc(100vw - 32px); background:var(--card); border:1px solid var(--border); border-radius:18px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.5); z-index:999; display:flex; flex-direction:column; max-height:500px; transform:scale(.9) translateY(20px); opacity:0; pointer-events:none; transition:all .25s cubic-bezier(.175,.885,.32,1.275); }
 .chat-panel.open { transform:scale(1) translateY(0); opacity:1; pointer-events:all; }
@@ -659,17 +664,17 @@
 </style>
 
 <!-- Chatbot button -->
-<button class="chatbot-btn" id="chatbotBtn" onclick="toggleChat()" title="HuntBot - Asistente IA">
-  🤖
+<button class="chatbot-btn radar-glow" id="chatbotBtn" onclick="toggleChat()" title="Caze - Asistente IA">
+  <img src="/assets/brand/caze-icon.svg" alt="Caze" style="width:28px;height:28px;object-fit:contain;">
   <span class="badge" id="chatBadge">1</span>
 </button>
 
 <!-- Chat panel -->
 <div class="chat-panel" id="chatPanel">
   <div class="chat-header">
-    <div class="chat-avatar">🤖</div>
+    <div class="chat-avatar"><img src="/assets/brand/caze-icon.svg" alt="Caze" style="width:24px;height:24px;object-fit:contain;"></div>
     <div style="flex:1">
-      <div style="font-size:14px;font-weight:700">HuntBot</div>
+      <div style="font-size:14px;font-weight:700">Caze</div>
       <div style="font-size:11px;color:var(--text2)">Asistente de ofertas · IA</div>
     </div>
     <button onclick="toggleChat()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;padding:4px">✕</button>
@@ -678,9 +683,9 @@
     <!-- greeting injected by app.js on open -->
   </div>
   <div class="chat-suggestions" id="chatSuggestions">
-    <button class="chat-suggestion" onclick="sendChatSuggestion(this.textContent)">¿Hay tablets con +50% off?</button>
-    <button class="chat-suggestion" onclick="sendChatSuggestion(this.textContent)">Mejor oferta en celulares</button>
-    <button class="chat-suggestion" onclick="sendChatSuggestion(this.textContent)">¿Vale la pena esperar?</button>
+    <button class="chat-suggestion" onclick="sendChatSuggestion(this.textContent)">¿Cazaste alguna laptop?</button>
+    <button class="chat-suggestion" onclick="sendChatSuggestion(this.textContent)">Mejor oferta del día</button>
+    <button class="chat-suggestion" onclick="sendChatSuggestion(this.textContent)">Cazea este precio</button>
   </div>
   <div class="chat-input-area">
     <input type="text" id="chatInput" placeholder="Pregúntame sobre ofertas..." onkeydown="if(event.key==='Enter')sendChat()">

@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin – HuntPrice Perú</title>
+  <title>Admin – Hotprice Perú</title>
   <link rel="stylesheet" href="/css/styles.css">
   <style>
-    .admin-header { background: linear-gradient(135deg,#1a0800,#0d0d0d); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; align-items:center; justify-content:space-between; }
+    .admin-header { background: linear-gradient(135deg,rgba(255,69,0,0.12),var(--color-bg)); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; align-items:center; justify-content:space-between; }
     .log-entry { font-size:12px; padding:6px 10px; border-radius:6px; margin-bottom:4px; background:var(--bg3); display:flex; align-items:center; gap:8px; }
     .btn-sm { padding:6px 14px; border-radius:6px; border:1px solid; font-size:12px; cursor:pointer; transition:.2s; }
     .btn-sm.green { background:rgba(0,204,102,.1); border-color:var(--green); color:var(--green); }
@@ -36,13 +36,13 @@
   <div class="login-box">
     <div style="font-size:48px;margin-bottom:16px">🔐</div>
     <h2 style="font-size:22px;font-weight:800;margin-bottom:8px">Panel Admin</h2>
-    <p style="color:var(--text2);font-size:13px;margin-bottom:24px">HuntPrice Perú</p>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:24px">Hotprice Perú</p>
     <div class="pw-wrap" style="margin-bottom:12px">
       <input type="password" id="adminPass" class="form-input" placeholder="Contraseña de admin" onkeydown="if(event.key==='Enter')doLogin()">
       <button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1">👁️</button>
     </div>
     <button class="btn-primary" onclick="doLogin()">Entrar</button>
-    <p style="margin-top:16px;font-size:12px;color:var(--text3)">Contraseña por defecto: <code>huntprice2024</code></p>
+    <p style="margin-top:16px;font-size:12px;color:var(--text3)">Contraseña por defecto: <code>hotprice2024</code></p>
   </div>
 </div>
 
@@ -50,7 +50,7 @@
 <div class="admin-header">
   <div style="display:flex;align-items:center;gap:12px">
     <a href="/" style="color:var(--text2);font-size:20px;text-decoration:none">←</a>
-    <div style="font-size:18px;font-weight:800">🔥 HuntPrice <span style="color:var(--orange)">Admin</span></div>
+    <div style="font-size:18px;font-weight:800">🔥 Hotprice <span style="color:var(--orange)">Admin</span></div>
   </div>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="live-badge"><span class="live-dot"></span>EN VIVO</span>
@@ -202,11 +202,11 @@
       </div>
 
       <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
-        <div style="font-size:13px;font-weight:700;color:#a78bfa;margin-bottom:12px">🤖 HuntBot – Google Gemini API Key</div>
+        <div style="font-size:13px;font-weight:700;color:#a78bfa;margin-bottom:12px">🤖 Caze – Google Gemini API Key</div>
         <div class="form-group">
           <label class="form-label">Google Gemini API Key</label>
           <div class="pw-wrap"><input class="form-input" type="password" name="gemini_api_key" id="cfg_gemini_key" placeholder="AIza..."><button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1">👁️</button></div>
-          <div class="form-hint">Necesaria para el chatbot HuntBot. Obtén tu key en <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--orange)">aistudio.google.com/apikey</a></div>
+          <div class="form-hint">Necesaria para el chatbot Caze. Obtén tu key en <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--orange)">aistudio.google.com/apikey</a></div>
         </div>
       </div>
 

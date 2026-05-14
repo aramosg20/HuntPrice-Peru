@@ -2,15 +2,20 @@
 
 /* ─── Variables ─────────────────────────────────────────────────────────────── */
 :root {
-  --bg: #0d0d0d;
-  --bg2: #141414;
-  --bg3: #1c1c1c;
-  --card: #191919;
-  --border: #272727;
-  --orange: #FF6600;
-  --orange-dark: #CC4400;
-  --orange-glow: rgba(255,102,0,0.25);
-  --green: #00CC66;
+  /* ── Hotprice Design System ── */
+  --color-primary: #FF4500;
+  --color-bg: #1A1A1A;
+  --color-success: #2ECC71;
+
+  --bg: #1A1A1A;
+  --bg2: #222222;
+  --bg3: #2a2a2a;
+  --card: #252525;
+  --border: #333333;
+  --orange: #FF4500;
+  --orange-dark: #CC2200;
+  --orange-glow: rgba(255,69,0,0.25);
+  --green: #2ECC71;
   --green-bright: #00FF88;
   --red: #FF3333;
   --yellow: #FFB800;
@@ -44,7 +49,7 @@ html { scroll-behavior: smooth; }
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--bg);
+  background: var(--color-bg);
   color: var(--text);
   line-height: 1.5;
   min-height: 100vh;
@@ -64,7 +69,7 @@ a:hover { text-decoration: underline; }
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(13,13,13,0.92);
+  background: rgba(26,26,26,0.92);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
   padding: 0 20px;
@@ -85,7 +90,7 @@ a:hover { text-decoration: underline; }
 
 .navbar-brand .logo-icon {
   width: 36px; height: 36px;
-  background: linear-gradient(135deg, var(--orange), #FF4400);
+  background: linear-gradient(135deg, var(--color-primary), var(--orange-dark));
   border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
   font-size: 18px;
@@ -97,13 +102,14 @@ a:hover { text-decoration: underline; }
 
 .live-badge {
   display: flex; align-items: center; gap: 6px;
-  background: rgba(255,102,0,0.15);
-  border: 1px solid rgba(255,102,0,0.3);
+  background: rgba(255,69,0,0.15);
+  border: 1px solid rgba(255,69,0,0.3);
   padding: 4px 12px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--orange);
+  color: var(--color-primary);
+  animation: blink 2.5s ease-in-out infinite;
 }
 
 .live-dot {
@@ -134,13 +140,13 @@ a:hover { text-decoration: underline; }
 
 /* ─── Hero / Stats Bar ───────────────────────────────────────────────────────── */
 .hero {
-  background: linear-gradient(135deg, #1a0a00 0%, #0d0d0d 50%, #001a0a 100%);
+  background: linear-gradient(135deg, rgba(255,69,0,0.12) 0%, var(--color-bg) 55%, rgba(46,204,113,0.04) 100%);
   border-bottom: 1px solid var(--border);
   padding: 28px 20px;
 }
 
 [data-theme="light"] .hero {
-  background: linear-gradient(135deg, #fff7ed 0%, #fafafa 55%, #f0fdf4 100%);
+  background: linear-gradient(135deg, rgba(255,69,0,0.08) 0%, #f0f0f0 55%, rgba(46,204,113,0.05) 100%);
 }
 
 .hero-inner { max-width: 1400px; margin: 0 auto; }
@@ -319,8 +325,8 @@ input[type="range"] {
 /* ─── Top Exclusivos ─────────────────────────────────────────────────────────── */
 .exclusivos-section {
   margin-bottom: 28px;
-  background: linear-gradient(135deg, rgba(255,102,0,0.06) 0%, rgba(255,51,51,0.04) 100%);
-  border: 1px solid rgba(255,102,0,0.25);
+  background: linear-gradient(135deg, rgba(255,69,0,0.07) 0%, rgba(255,51,51,0.04) 100%);
+  border: 1px solid rgba(255,69,0,0.25);
   border-radius: var(--radius);
   padding: 18px 20px 20px;
   position: relative;

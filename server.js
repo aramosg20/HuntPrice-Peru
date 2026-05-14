@@ -409,7 +409,7 @@ app.put('/api/profile/:token', (req, res) => {
   }
 });
 
-// ── HuntBot Chat ──────────────────────────────────────────────────────────────
+// ── Caze Chat ─────────────────────────────────────────────────────────────────
 
 app.post('/api/chat', async (req, res) => {
   try {
@@ -473,7 +473,7 @@ app.post('/api/chat', async (req, res) => {
       }
     }
 
-    const systemPrompt = `Eres HuntBot, el asistente de compras inteligente de HuntPrice Perú. Ayudas a los usuarios a encontrar las mejores ofertas y tomar decisiones de compra informadas.
+    const systemPrompt = `Eres Caze, el asistente de compras inteligente de Hotprice Perú. Ayudas a los usuarios a encontrar las mejores ofertas y tomar decisiones de compra informadas.
 
 CATÁLOGO COMPLETO DE OFERTAS (${contextProducts.length} productos — busca aquí SIEMPRE antes de responder):
 ${mainContext || 'No hay ofertas disponibles en este momento.'}
@@ -633,7 +633,7 @@ INSTRUCCIÓN CRÍTICA Y OBLIGATORIA — CONTROL DEL BUSCADOR:
   }
 });
 
-// ── HuntBot Chat Notify ───────────────────────────────────────────────────────
+// ── Caze Chat Notify ──────────────────────────────────────────────────────────
 
 app.post('/api/chat/notify', async (req, res) => {
   try {
@@ -821,7 +821,7 @@ app.post('/api/auth/register', async (req, res) => {
     res.json({
       ok: true, token,
       user: { id: user.id, username: user.username, email: user.email, phone: user.phone },
-      message: '¡Bienvenido a HuntPrice Perú!'
+      message: '¡Bienvenido a Hotprice Perú!'
     });
   } catch (e) {
     console.error('[Auth] Register:', e.message);
@@ -1160,7 +1160,7 @@ app.post('/api/search/smart', async (req, res) => {
 
 function requireAdmin(req, res, next) {
   const pass = req.headers['x-admin-password'] || req.query.pass;
-  const expected = process.env.ADMIN_PASSWORD || db.getConfig('admin_password') || 'huntprice2024';
+  const expected = process.env.ADMIN_PASSWORD || db.getConfig('admin_password') || 'hotprice2024';
   if (pass !== expected) return res.status(401).json({ ok: false, error: 'No autorizado' });
   next();
 }
@@ -1323,7 +1323,7 @@ app.post('/api/setup', (req, res) => {
     const envPath = path.join(__dirname, '.env');
     const envLines = [
       `PORT=${PORT}`,
-      `ADMIN_PASSWORD=${admin_password || 'huntprice2024'}`,
+      `ADMIN_PASSWORD=${admin_password || 'hotprice2024'}`,
       `GMAIL_USER=${gmail_user || ''}`,
       `GMAIL_APP_PASSWORD=${gmail_app_password || ''}`,
       `TWILIO_ACCOUNT_SID=${twilio_sid || ''}`,
