@@ -28,7 +28,7 @@ const { cleanTitle, urlToSku, cleanScene7Url } = require('./utils');
 
 const STORE           = 'Falabella';
 const BASE            = 'https://www.falabella.com.pe';
-const MAX_PAGES       = 15;  // safety cap: pages per category
+const MAX_PAGES       = 50;  // safety cap: pages per category
 const MIN_DISCOUNT    = 5;   // % — skip trivial deals
 const PAGE_SIZE       = 24;  // Falabella's default products-per-page
 const CAT_CONCURRENCY = 3;   // categories scraped in parallel
@@ -190,7 +190,7 @@ async function discoverCategories(context) {
   return MANDATORY_PATHS;
 }
 
-/** Walk known key paths in __NEXT_DATA__ looking for nav/category arrays. */
+/** Walk known key paths in __NEXT_DATA__ looking for nav/category arrays (3 levels deep). */
 function navPathsFromNextData(nd) {
   if (!nd) return [];
   const paths  = [];
@@ -205,12 +205,18 @@ function navPathsFromNextData(nd) {
   for (const root of navRoots) {
     if (!Array.isArray(root)) continue;
     for (const item of root) {
-      const href = item?.url || item?.path || item?.href || '';
-      const p    = toPathname(href);
+      const p = toPathname(item?.url || item?.path || item?.href || '');
       if (isValidCategoryPath(p)) paths.push(p);
-      for (const child of item?.children || item?.subcategories || []) {
+      const children = item?.children || item?.subcategories || [];
+      for (const child of children) {
         const cp = toPathname(child?.url || child?.path || '');
         if (isValidCategoryPath(cp)) paths.push(cp);
+        // Level 3: e.g. Mundo Bebé → Dormitorio Bebé → Cómodas y Cambiadores
+        const grandchildren = child?.children || child?.subcategories || [];
+        for (const grand of grandchildren) {
+          const gp = toPathname(grand?.url || grand?.path || '');
+          if (isValidCategoryPath(gp)) paths.push(gp);
+        }
       }
     }
   }
@@ -223,8 +229,7 @@ async function scrapeCategory(context, categoryUrl, seen) {
   const intercepted = [];
   const page        = await openPage(context);
 
-  // ── Level A setup: network interception ─────────────────────────────────
-  // Must be registered BEFORE goto() to capture responses from initial load.
+  // Level A: register BEFORE goto() to capture page-1 API responses
   const onResponse = async response => {
     try {
       const url = response.url();
@@ -232,10 +237,10 @@ async function scrapeCategory(context, categoryUrl, seen) {
       const ct = response.headers()['content-type'] || '';
       if (!ct.includes('json')) return;
       const isListingApi =
-        url.includes('/s/browse/') ||
-        url.includes('/api/listing') ||
+        url.includes('/s/browse/')     ||
+        url.includes('/api/listing')   ||
         url.includes('catalog-detail') ||
-        url.includes('search/v1')   ||
+        url.includes('search/v1')      ||
         url.includes('listing-page');
       if (!isListingApi) return;
       const json = await response.json().catch(() => null);
@@ -245,14 +250,14 @@ async function scrapeCategory(context, categoryUrl, seen) {
   page.on('response', onResponse);
 
   try {
+    // ── Page 1: full navigation ────────────────────────────────────────────
     await page.goto(categoryUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-    // ── Level B: __NEXT_DATA__ ─────────────────────────────────────────────
-    const nd       = await extractNextData(page);
-    const buildId  = nd?.buildId || null;
-    let   rawItems = resultsFromNd(nd);
+    const nd      = await extractNextData(page);
+    const buildId = nd?.buildId || null;
+    let rawItems  = resultsFromNd(nd);
 
-    // ── Level A: prefer intercepted API data if it beat Level B ───────────
+    // Level A: prefer intercepted API data if richer than __NEXT_DATA__
     if (intercepted.length > 0) {
       for (const data of intercepted) {
         const apiItems = resultsFromApiResponse(data);
@@ -260,37 +265,37 @@ async function scrapeCategory(context, categoryUrl, seen) {
       }
     }
 
-    // ── Level C: DOM fallback ─────────────────────────────────────────────
+    // Level C: DOM fallback
     if (rawItems.length === 0) {
       console.warn(`[${STORE}] Fallback DOM en ${categoryUrl}`);
       rawItems = await extractFromDom(page, categoryUrl);
     }
 
     parseAndAdd(rawItems, products, seen, categoryUrl);
+    const p1Count = rawItems.length;
 
-    // ── Pagination via Next.js data API ───────────────────────────────────
-    const total = totalCountFromNd(nd);
-    if (total > rawItems.length && buildId) {
-      const urlObj   = new URL(categoryUrl);
-      const ndPath   = urlObj.pathname.replace(/\/$/, '') + '.json';
-      const ndBase   = `${urlObj.origin}/_next/data/${buildId}${ndPath}`;
-      const maxPages = Math.min(Math.ceil(total / PAGE_SIZE), MAX_PAGES);
+    // Nothing on page 1 → skip pagination
+    if (p1Count === 0) return products;
 
-      // Fetch pages 2-N concurrently in batches of 3
-      for (let p = 2; p <= maxPages; p += 3) {
-        const batch = [p, p + 1, p + 2].filter(n => n <= maxPages);
-        const pages = await Promise.all(batch.map(n => fetchNdPage(page, ndBase, n)));
-        let gotAny = false;
-        for (const pData of pages) {
-          const pItems = resultsFromNd(pData);
-          if (pItems.length === 0) continue;
-          gotAny = true;
-          parseAndAdd(pItems, products, seen, categoryUrl);
-        }
-        if (!gotAny) break;
-        console.log(`  [${STORE}] páginas ${batch[0]}–${batch[batch.length - 1]} → ${products.length} acum.`);
-        await delay(600 + Math.random() * 400);
+    // ── Multi-strategy pagination ──────────────────────────────────────────
+    // Upper bound: use totalCount when known; otherwise probe until empty.
+    // NEVER gate on total > p1Count — totalCount can be 0 if pageProps shape
+    // is unknown, which was silently skipping pagination on every category.
+    const total    = totalCountFromNd(nd);
+    const maxPages = total > 0
+      ? Math.min(Math.ceil(total / PAGE_SIZE), MAX_PAGES)
+      : MAX_PAGES;
+
+    if (buildId) {
+      // Strategy A: _next/data lightweight fetches (no page navigation)
+      const gotMore = await paginateViaNextData(page, categoryUrl, buildId, maxPages, products, seen);
+      if (!gotMore) {
+        // _next/data returned nothing → fall back to ?page=N URL navigation
+        await paginateViaUrl(page, categoryUrl, maxPages, products, seen);
       }
+    } else {
+      // No buildId → go straight to URL-based pagination
+      await paginateViaUrl(page, categoryUrl, maxPages, products, seen);
     }
 
   } finally {
@@ -299,6 +304,63 @@ async function scrapeCategory(context, categoryUrl, seen) {
   }
 
   return products;
+}
+
+/**
+ * Fast pagination via Next.js /_next/data/{buildId}/path.json?page=N
+ * Fetched from inside the browser context (inherits cookies + TLS fingerprint).
+ * Returns true if at least one additional page was retrieved.
+ */
+async function paginateViaNextData(page, categoryUrl, buildId, maxPages, products, seen) {
+  const urlObj = new URL(categoryUrl);
+  const ndPath = urlObj.pathname.replace(/\/$/, '') + '.json';
+  const ndBase = `${urlObj.origin}/_next/data/${buildId}${ndPath}`;
+  let   gotAny = false;
+
+  for (let p = 2; p <= maxPages; p += 3) {
+    const batch    = [p, p + 1, p + 2].filter(n => n <= maxPages);
+    const fetched  = await Promise.all(batch.map(n => fetchNdPage(page, ndBase, n)));
+    let   batchHit = false;
+
+    for (const pData of fetched) {
+      const pItems = resultsFromNd(pData);
+      if (pItems.length === 0) continue;
+      batchHit = true;
+      gotAny   = true;
+      parseAndAdd(pItems, products, seen, categoryUrl);
+    }
+
+    if (!batchHit) break; // consecutive empty batch → natural end of catalog
+    console.log(`  [${STORE}] nd p${batch[0]}–${batch[batch.length - 1]} → ${products.length} acum.`);
+    await delay(600 + Math.random() * 400);
+  }
+
+  return gotAny;
+}
+
+/**
+ * URL-based pagination: navigates to categoryUrl?page=N, extracts __NEXT_DATA__
+ * (or DOM fallback). Used when buildId is unavailable or _next/data returns nothing.
+ */
+async function paginateViaUrl(page, categoryUrl, maxPages, products, seen) {
+  const baseUrl = categoryUrl.split('?')[0];
+
+  for (let p = 2; p <= maxPages; p++) {
+    const pageUrl = `${baseUrl}?page=${p}`;
+    try {
+      await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+      const nd = await extractNextData(page);
+      let pItems = resultsFromNd(nd);
+      if (pItems.length === 0) pItems = await extractFromDom(page, pageUrl);
+      if (pItems.length === 0) break; // natural end of catalog
+      parseAndAdd(pItems, products, seen, categoryUrl);
+      console.log(`  [${STORE}] ?page=${p} → ${products.length} acum.`);
+      await delay(1500 + Math.random() * 1000);
+    } catch (err) {
+      console.error(`  [${STORE}] Error pag. URL p${p}: ${err.message}`);
+      break;
+    }
+  }
 }
 
 // ── Data extraction helpers ───────────────────────────────────────────────────
