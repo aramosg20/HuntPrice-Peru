@@ -25,18 +25,17 @@ function isTrackerUrl(url) {
   return false;
 }
 
-// Level-3 search URLs never redirect to home; /seleccion/ is a safe hub page.
+// Direct category paths — these serve real product grids with __NEXT_DATA__ intact.
+// /search?Ntt= routes have inconsistent behaviour on the Falabella-stack Sodimac site.
 const CATEGORIAS_BASE = [
-  `${BASE}/sodimac-pe/seleccion/ofertas-sodimac`,
-  `${BASE}/sodimac-pe/search?Ntt=herramientas+electricas`,
-  `${BASE}/sodimac-pe/search?Ntt=pinturas`,
-  `${BASE}/sodimac-pe/search?Ntt=muebles`,
-  `${BASE}/sodimac-pe/search?Ntt=colchon`,
-  `${BASE}/sodimac-pe/search?Ntt=electrohogar`,
-  `${BASE}/sodimac-pe/search?Ntt=jardin`,
-  `${BASE}/sodimac-pe/search?Ntt=iluminacion`,
-  `${BASE}/sodimac-pe/search?Ntt=herramientas+manuales`,
-  `${BASE}/sodimac-pe/search?Ntt=pisos+ceramica`,
+  `${BASE}/sodimac-pe/category/cat10020/herramientas-electricas`,
+  `${BASE}/sodimac-pe/category/cat10032/pisos`,
+  `${BASE}/sodimac-pe/category/cat10048/muebles`,
+  `${BASE}/sodimac-pe/category/cat10050/iluminacion`,
+  `${BASE}/sodimac-pe/category/cat10154/electrohogar`,
+  `${BASE}/sodimac-pe/category/cat10214/banos`,
+  `${BASE}/sodimac-pe/category/cat10188/jardin`,
+  `${BASE}/sodimac-pe/category/cat10052/pinturas`,
 ];
 
 // PE localization cookies prevent the Falabella-stack from redirecting to a
