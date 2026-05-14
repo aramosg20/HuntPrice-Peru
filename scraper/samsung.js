@@ -34,6 +34,28 @@ function guessCategory(name) {
   return 'Tecnología';
 }
 
+// Scrolls until card count stabilises, clicking "Load More" when visible.
+async function scrollUntilStable(page, maxScrolls = 8) {
+  let prevCount = 0;
+  for (let i = 0; i < maxScrolls; i++) {
+    const count = await page.evaluate(() =>
+      document.querySelectorAll('.pd21-product-card__item').length
+    );
+    if (i > 0 && count === prevCount) break;
+    prevCount = count;
+
+    const clicked = await page.evaluate(() => {
+      const btn = document.querySelector(
+        '.pd21-load-more__button, .pd21-load-more button, [class*="load-more"] button'
+      );
+      if (btn && btn.offsetParent !== null) { btn.click(); return true; }
+      return false;
+    });
+    await page.waitForTimeout(clicked ? 2500 : 2000);
+    if (!clicked) await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  }
+}
+
 async function scrapeCategory(ctx, categoryUrl) {
   const page = await ctx.newPage();
   try {
@@ -53,7 +75,11 @@ async function scrapeCategory(ctx, categoryUrl) {
     });
 
     await page.goto(categoryUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(3000);
+
+    // Scroll/load-more loop triggers lazy-loaded products and additional XHR calls.
+    await scrollUntilStable(page);
+    await page.waitForTimeout(1500); // let final XHR responses settle
 
     if (apiProducts.length > 0) {
       log('scrape_api_captured', { url: categoryUrl, count: apiProducts.length });
