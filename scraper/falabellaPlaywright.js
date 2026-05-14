@@ -33,9 +33,9 @@ const { cleanTitle, urlToSku, cleanScene7Url } = require('./utils');
 
 const STORE            = 'Falabella';
 const BASE             = 'https://www.falabella.com.pe';
-const MAX_PAGES_FAST   = 5;   // fast mode: cap per category (cron every 15 min)
-const MAX_PAGES_FULL   = 50;  // full mode: cap per category (nightly deep-crawl)
-const CAT_CONCURRENCY  = 2;   // max parallel categories — polite scraping
+const MAX_PAGES_FAST   = 3;   // fast mode: max 3 pages/cat — balance cobertura/seguridad
+const MAX_PAGES_FULL   = 50;  // full mode: deep-crawl nocturno
+const CAT_CONCURRENCY  = 3;   // 3 workers en paralelo
 const MIN_DISCOUNT     = 5;   // % — skip trivial deals
 const PAGE_SIZE        = 24;  // Falabella's default products-per-page
 
@@ -50,46 +50,34 @@ const USER_AGENTS = [
 ];
 
 // ── Mandatory categories ───────────────────────────────────────────────────────
-// All paths use /collection/ slugs — Falabella redirects /category/cat629XXXX/
-// (root-level IDs) to the home page as an anti-bot measure; /collection/ and
-// deeper /category/catXXXXX/ (non-root IDs) are stable.
-// Fast mode scans ONLY this list; full mode merges it with dynamic discovery.
+// Combinación de rutas /category/ (motor de 4 343 prods confirmado) y
+// /collection/ (cobertura garantizada de áreas clave como Cómodas y Bebé).
+// Fast mode escanea SOLO esta lista; full mode fusiona con discovery dinámico.
 const MANDATORY_PATHS = [
-  // ── Deals & promotions (always reliable) ───────────────────────────────────
+  // ── Deals hub ──────────────────────────────────────────────────────────────
   '/falabella-pe/collection/descuentos',
   '/falabella-pe/collection/descuentos-cmr',
-  // ── Tecnología ─────────────────────────────────────────────────────────────
-  '/falabella-pe/collection/celulares-y-smartphones',
-  '/falabella-pe/collection/laptops-y-computadoras',
-  '/falabella-pe/collection/tablets',
-  '/falabella-pe/collection/television',
-  '/falabella-pe/collection/audio',
-  '/falabella-pe/collection/gaming',
-  // ── Electrohogar ───────────────────────────────────────────────────────────
-  '/falabella-pe/collection/refrigeradoras',
-  '/falabella-pe/collection/lavadoras',
-  '/falabella-pe/collection/microondas',
-  '/falabella-pe/collection/aspiradoras',
-  // ── Moda ───────────────────────────────────────────────────────────────────
-  '/falabella-pe/collection/zapatillas',
-  '/falabella-pe/collection/ropa-mujer',
-  '/falabella-pe/collection/ropa-hombre',
-  '/falabella-pe/collection/ropa-ninos',
-  // ── Hogar y muebles ────────────────────────────────────────────────────────
+  // ── Categorías principales (motor confirmado ~4 300 prods) ─────────────────
+  '/falabella-pe/category/cat6290005/Tecnologia',
+  '/falabella-pe/category/cat6290004/Electrohogar',
+  '/falabella-pe/category/cat6290001/Moda',
+  '/falabella-pe/category/cat6290007/Muebles-y-Deco',
+  '/falabella-pe/category/cat6290008/Deportes',
+  '/falabella-pe/category/cat6290009/Mundo-Bebe',
+  '/falabella-pe/category/cat6290002/Belleza',
+  '/falabella-pe/category/cat6290006/Computacion',
+  '/falabella-pe/category/cat6290003/Ninos',
+  '/falabella-pe/category/cat6290010/Hogar',
+  // ── Colecciones clave — cobertura garantizada aunque /category/ falle ──────
   '/falabella-pe/collection/muebles',
   '/falabella-pe/collection/dormitorio',
   '/falabella-pe/collection/colchones',
   '/falabella-pe/collection/organizacion',
-  '/falabella-pe/collection/cocina',
-  // ── Mundo Bebé (paths confirmados) ─────────────────────────────────────────
+  // ── Mundo Bebé — rutas específicas para asegurar Cómodas y Cambiadores ─────
   '/falabella-pe/collection/mundo-bebe',
   '/falabella-pe/collection/comodas-y-cambiadores',
   '/falabella-pe/collection/carriolas-y-cochecitos',
   '/falabella-pe/collection/cunas-y-camas-bebe',
-  // ── Otros ──────────────────────────────────────────────────────────────────
-  '/falabella-pe/collection/belleza',
-  '/falabella-pe/collection/deportes',
-  '/falabella-pe/collection/herramientas',
 ];
 
 // ── Resource blocking ──────────────────────────────────────────────────────────
@@ -317,24 +305,6 @@ async function scrapeCategory(context, categoryUrl, seen, maxPagesPerCat, mode) 
   try {
     // ── Page 1: full navigation ─────────────────────────────────────────────
     await page.goto(categoryUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-    // ── Anti-home redirect guard ────────────────────────────────────────────
-    // Falabella silently redirects root /category/cat629XXXX/ IDs to the
-    // homepage as an anti-bot measure. Detect and bail out immediately so we
-    // never waste time parsing the home page's __NEXT_DATA__.
-    {
-      const landedUrl  = page.url();
-      const homePaths  = [`${BASE}/falabella-pe`, `${BASE}/falabella-pe/`, BASE, `${BASE}/`];
-      const isHome     = homePaths.includes(landedUrl.split('?')[0]);
-      const isRedirect = !landedUrl.includes('/category/') && !landedUrl.includes('/collection/');
-      if (isHome || isRedirect) {
-        console.warn(
-          `[${STORE}] Redirigido al Home — saltando ${new URL(categoryUrl).pathname} ` +
-          `(URL final: ${landedUrl.slice(0, 70)})`
-        );
-        return products;
-      }
-    }
 
     // /category/ pages hydrate the product grid client-side after SSR.
     // Wait up to 8 s for any recognisable pod element before reading the DOM.
