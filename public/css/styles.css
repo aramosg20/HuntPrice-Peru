@@ -568,12 +568,19 @@ input[type="range"] {
 
 .sti-text { font-style: italic; line-height: 1.5; }
 
+.sti-count {
+  color: var(--orange);
+  font-style: normal;
+  font-weight: 700;
+}
+
 .sti-terms {
   color: var(--orange);
   font-style: italic;
   font-weight: 600;
 }
 
+[data-theme="light"] .sti-count,
 [data-theme="light"] .sti-terms { color: var(--orange-dark, #c2410c); }
 
 /* ─── Products toolbar ───────────────────────────────────────────────────────── */

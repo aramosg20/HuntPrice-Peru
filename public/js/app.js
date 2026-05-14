@@ -42,6 +42,9 @@ function renderSearchTermsInfo() {
     el.style.display = 'none';
     return;
   }
+  const count = state.gridOverride?.products?.length ?? 0;
+  const countEl = document.getElementById('searchTermsCount');
+  if (countEl) countEl.textContent = count;
   const listEl = document.getElementById('searchTermsList');
   if (listEl) listEl.textContent = state.searchTerms.join(', ');
   el.style.display = '';
