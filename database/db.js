@@ -254,8 +254,8 @@ function getProducts(filters = {}) {
   if (filters.minDiscount) { where.push('pr.discount_percent >= ?'); params.push(filters.minDiscount); }
   if (filters.maxPrice) { where.push('pr.current_price <= ?'); params.push(filters.maxPrice); }
   if (filters.search) {
-    where.push('p.name LIKE ?');
-    params.push(`%${filters.search}%`);
+    where.push("(' ' || LOWER(p.name) || ' ') LIKE ?");
+    params.push(`% ${filters.search.toLowerCase()} %`);
   }
 
   const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';

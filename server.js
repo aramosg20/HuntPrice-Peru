@@ -1094,27 +1094,16 @@ app.post('/api/search/smart', async (req, res) => {
     }
     const q = query.trim().slice(0, 200);
 
-    let terms = extractSearchKeywords(q);
+    let terms = [];
 
+    // ── Gemini semantic expansion (primary) ──────────────────────────────────
     const apiKey = process.env.GEMINI_API_KEY || db.getConfig('gemini_api_key');
     if (apiKey) {
       try {
-        const prompt = `Eres el motor semántico de un buscador de tiendas peruanas (Falabella, Ripley, Oechsle, Sodimac). El usuario puede escribir con errores ortográficos o abreviaciones.
-
-Tu tarea: dado el término del usuario, devuelve un array JSON de palabras clave para buscar esos productos.
-
-REGLAS OBLIGATORIAS:
-1. Corrige errores ortográficos — el primer elemento debe ser el término corregido (ej: "tavlet" → "tablet").
-2. Incluye marcas y modelos conocidos en Perú (ej: para "tablet" → "ipad", "galaxy tab", "lenovo tab").
-3. Incluye variantes de nombre (con/sin tilde, singular/plural).
-4. NO incluyas abreviaciones ambiguas de raíz corta que puedan coincidir con otras categorías (ej: NO pongas "tab" solo — coincide con "tabla de picar"; en su lugar pon "galaxy tab" o "lenovo tab").
-5. NO mezcles categorías: si el término es tecnología, excluye productos de Hogar, Cocina u otras categorías no tecnológicas.
-6. Máximo 12 términos. Devuelve SOLO el array JSON, sin explicación ni texto adicional.
-
-Término del usuario: "${q}"`;
-        const body = JSON.stringify({
+        const prompt = `Eres un motor de búsqueda experto en e-commerce peruano (Falabella, Ripley, Oechsle, Sodimac). El usuario busca: "${q}". Devuelve ÚNICAMENTE un array en formato JSON con el término corregido, sinónimos, marcas y modelos relacionados en Perú. Ejemplo para "tablet": ["tablet", "ipad", "tab", "galaxy tab", "lenovo tab", "pad"]. No incluyas texto adicional ni explicaciones, solo el JSON.`;
+        const geminiBody = JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 200, temperature: 0.1 }
+          generationConfig: { maxOutputTokens: 300, temperature: 0.1 }
         });
         const geminiTerms = await new Promise((resolve, reject) => {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -1123,7 +1112,7 @@ Término del usuario: "${q}"`;
             hostname: parsed.hostname,
             path: parsed.pathname + parsed.search,
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(geminiBody) }
           };
           const r2 = https.request(options, (r) => {
             let data = '';
@@ -1131,27 +1120,33 @@ Término del usuario: "${q}"`;
             r.on('end', () => {
               try {
                 const json = JSON.parse(data);
-                const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                const match = text.match(/\[[\s\S]*?\]/);
+                const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                // Strip markdown code fences, then extract the first JSON array
+                const cleaned = raw.replace(/```json?\n?/gi, '').replace(/```\n?/gi, '').trim();
+                const match = cleaned.match(/\[[\s\S]*\]/);
                 if (match) {
                   const arr = JSON.parse(match[0]);
-                  if (Array.isArray(arr)) return resolve(arr.map(s => String(s).toLowerCase().trim()).filter(Boolean));
+                  if (Array.isArray(arr) && arr.length > 0) {
+                    return resolve(arr.map(s => String(s).toLowerCase().trim()).filter(s => s.length >= 2));
+                  }
                 }
                 resolve([]);
               } catch (_) { resolve([]); }
             });
           });
           r2.on('error', reject);
-          r2.setTimeout(8000, () => { r2.destroy(new Error('Timeout')); });
-          r2.write(body);
+          r2.setTimeout(15000, () => { r2.destroy(new Error('Timeout')); });
+          r2.write(geminiBody);
           r2.end();
         });
-        if (geminiTerms.length > 0) {
-          terms = [...new Set([...terms, ...geminiTerms])];
-        }
-      } catch (_) { /* use local terms on Gemini failure */ }
+        if (geminiTerms.length > 0) terms = geminiTerms;
+      } catch (_) { /* fall through to local expansion */ }
     }
 
+    // ── Local fallback (SYNONYM_MAP + stopword filter) ───────────────────────
+    if (terms.length === 0) terms = extractSearchKeywords(q);
+
+    // Last resort: raw query as single term
     if (terms.length === 0) terms = [q.toLowerCase()];
 
     const products = db.searchProductsByKeyword(terms, 60);

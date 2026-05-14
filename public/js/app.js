@@ -192,8 +192,7 @@ async function executeSmartSearch(query) {
   try {
     const json = await apiFetch('/api/search/smart', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
+      body: { query }
     });
     state.gridOverride = { source: 'search', products: json.products, query };
     const countEl = document.getElementById('resultsCount');
