@@ -242,6 +242,15 @@ function getProducts(filters = {}) {
   where.push('p.active = 1');
   if (filters.store) { where.push('p.store = ?'); params.push(filters.store); }
   if (filters.category) { where.push('p.category = ?'); params.push(filters.category); }
+  // Multi-value preference filters (only used when no single store/category is set)
+  if (!filters.store && filters.storeList && filters.storeList.length) {
+    where.push(`p.store IN (${filters.storeList.map(() => '?').join(',')})`);
+    params.push(...filters.storeList);
+  }
+  if (!filters.category && filters.categoryList && filters.categoryList.length) {
+    where.push(`p.category IN (${filters.categoryList.map(() => '?').join(',')})`);
+    params.push(...filters.categoryList);
+  }
   if (filters.minDiscount) { where.push('pr.discount_percent >= ?'); params.push(filters.minDiscount); }
   if (filters.maxPrice) { where.push('pr.current_price <= ?'); params.push(filters.maxPrice); }
   if (filters.search) {
@@ -358,7 +367,10 @@ function getUsers() {
 
 function getUsersForAlert(product) {
   const d = getDb();
-  const users = d.prepare('SELECT * FROM users WHERE active = 1').all();
+  // Only include users who want at least one notification channel
+  const users = d.prepare(
+    'SELECT * FROM users WHERE active = 1 AND (COALESCE(notify_email,1) != 0 OR COALESCE(notify_whatsapp,1) != 0)'
+  ).all();
   return users.filter(u => {
     const cats = JSON.parse(u.categories || '[]');
     const stores = JSON.parse(u.stores || '[]');

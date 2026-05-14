@@ -18,6 +18,7 @@ const state = {
   // ── Auth ──
   authToken: localStorage.getItem('hp_auth_token') || null,
   authUser:  JSON.parse(localStorage.getItem('hp_auth_user') || 'null'),
+  authPrefs: null,   // loaded from /api/auth/preferences after login
 };
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
@@ -200,6 +201,16 @@ async function loadProducts(reset = false) {
     if (state.filters.maxPrice) params.set('maxPrice', state.filters.maxPrice);
     if (state.filters.search) params.set('q', state.filters.search);
 
+    // Apply saved auth preferences as default filters when no manual store/category/search is active
+    const noManualFilter = !state.filters.store && !state.filters.category && !state.filters.search;
+    const prefs = state.authPrefs;
+    if (prefs && noManualFilter) {
+      if (prefs.stores && prefs.stores.length)     params.set('stores', prefs.stores.join(','));
+      if (prefs.categories && prefs.categories.length) params.set('categories', prefs.categories.join(','));
+      // Default sort is newest when preference filtering is active
+      if (!state.filters.sort || state.filters.sort === 'newest') params.set('sort', 'newest');
+    }
+
     const { data, count } = await apiFetch('/api/products?' + params.toString());
 
     if (reset) {
@@ -350,7 +361,7 @@ async function openProductDetail(id) {
       ${buildPriceChart(data.prices)}
       <div style="margin-top:20px;display:flex;gap:10px">
         <a href="${escHtml(data.url)}" target="_blank" class="btn-buy" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:12px">🛒 IR A COMPRAR</a>
-        <button class="btn-alert" onclick="openProductAlertModal(${data.id},${escHtml(JSON.stringify(data.name))},${latest.current_price||0})" style="width:auto;padding:0 16px;white-space:nowrap">🔔 ALERTARME</button>
+        <button class="btn-share" onclick="shareProduct(${data.id}, event)" title="Enviar a mis canales" style="width:auto;padding:0 16px;white-space:nowrap;font-size:14px">📤 Enviar info</button>
       </div>
       <div style="margin-top:16px">
         <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">HISTORIAL DE PRECIOS</div>
@@ -953,7 +964,7 @@ function renderChatProductCard(p) {
       <span class="cpc-badge">-${discount}%</span>
       <div class="cpc-actions">
         <a class="cpc-btn-buy" href="${safeUrl}" target="_blank" rel="noopener">🛒 Ver oferta</a>
-        <button class="cpc-btn-alert" onclick="openProductAlertModal(${productId},'${safeName.replace(/'/g, "\\'")}',${currentPrice})">🔔 Alertarme</button>
+        <button class="cpc-btn-alert" onclick="shareProduct(${productId}, event)">📤 Enviar info</button>
       </div>
     </div>
   </div>`;
@@ -1242,6 +1253,22 @@ function toggleUserDropdown() {
 
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 
+async function loadAndApplyAuthPrefs() {
+  if (!state.authToken) return;
+  try {
+    const res  = await fetch('/api/auth/preferences', { headers: { Authorization: `Bearer ${state.authToken}` } });
+    const json = await res.json();
+    if (!json.ok) return;
+    const prev = state.authPrefs;
+    state.authPrefs = json.data;
+    // Reload the product grid only when preferences actually changed or first load
+    const hasPrefs = (json.data.categories && json.data.categories.length) ||
+                     (json.data.stores     && json.data.stores.length);
+    const changed  = JSON.stringify(prev) !== JSON.stringify(state.authPrefs);
+    if (changed) reloadProducts();
+  } catch (_) { /* non-fatal — offline or expired token */ }
+}
+
 async function initAuth() {
   if (!state.authToken) { updateProfileNavBtn(); return; }
   try {
@@ -1250,6 +1277,7 @@ async function initAuth() {
     if (json.ok) {
       state.authUser = json.user;
       localStorage.setItem('hp_auth_user', JSON.stringify(json.user));
+      await loadAndApplyAuthPrefs();
     } else {
       clearAuth();
     }
@@ -1260,6 +1288,7 @@ async function initAuth() {
 function clearAuth() {
   state.authToken = null;
   state.authUser  = null;
+  state.authPrefs = null;
   localStorage.removeItem('hp_auth_token');
   localStorage.removeItem('hp_auth_user');
 }
@@ -1290,6 +1319,7 @@ async function doLogin(event) {
     updateProfileNavBtn();
     showToast('👋', `¡Hola, ${json.user.username}!`, 'Sesión iniciada correctamente', 'success');
     resetChatForAuth();
+    loadAndApplyAuthPrefs();
   } catch (e) {
     showToast('❌', 'Error al ingresar', e.message, 'error');
   } finally {
@@ -1338,6 +1368,7 @@ async function doRegister(event) {
     updateProfileNavBtn();
     showToast('🎉', '¡Cuenta creada!', json.message || '¡Bienvenido a HuntPrice!', 'success');
     resetChatForAuth();
+    loadAndApplyAuthPrefs();
   } catch (e) {
     showToast('❌', 'Error al registrar', e.message, 'error');
   } finally {
@@ -1409,6 +1440,7 @@ async function doReactivate(choice) {
     updateProfileNavBtn();
     showToast('🎉', json.message || '¡Bienvenido de vuelta!', 'Tu cuenta ha sido reactivada', 'success');
     resetChatForAuth();
+    loadAndApplyAuthPrefs();
   } catch (e) {
     showToast('❌', 'Error al reactivar', e.message, 'error');
     if (btn) { btn.disabled = false; btn.textContent = btn.id === 'reactivateNewBtn' ? '✅ Sí, continuar con nuevos datos' : '🔄 Reactivar cuenta anterior'; }
@@ -1737,8 +1769,10 @@ async function saveAlertPreferences() {
     const json = await res.json();
     if (!json.ok) throw new Error(json.error);
     prefsState.saved = { ...prefs, categories: [...prefs.categories], stores: [...prefs.stores] };
+    state.authPrefs  = { ...prefs, categories: [...prefs.categories], stores: [...prefs.stores] };
     closeModal('alertPreferencesModal');
     showToast('✅', 'Preferencias guardadas', 'Recibirás alertas según tus preferencias', 'success');
+    reloadProducts();
   } catch (e) {
     showToast('❌', 'Error', e.message, 'error');
   } finally {
@@ -1835,6 +1869,8 @@ window.handleOthersCategoryInput = handleOthersCategoryInput;
 window.selectSuggestedCategory = selectSuggestedCategory;
 window.addCustomCategory = addCustomCategory;
 window.removeCustomCategory = removeCustomCategory;
+// auth prefs
+window.loadAndApplyAuthPrefs = loadAndApplyAuthPrefs;
 // reactivation & edit profile
 window.showReactivateModal = showReactivateModal;
 window.doReactivate = doReactivate;

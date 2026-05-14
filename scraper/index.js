@@ -134,7 +134,10 @@ async function sendAlerts(offers) {
 
   // One email digest + up to 3 WhatsApp messages per user per scan cycle
   for (const { user, products } of userOffers.values()) {
-    if (user.email) {
+    const wantsEmail = user.email && (user.notify_email == null || user.notify_email !== 0);
+    const wantsWA    = user.whatsapp && (user.notify_whatsapp == null || user.notify_whatsapp !== 0);
+
+    if (wantsEmail) {
       try {
         await notifyUsers([user], null, { digest: true, offers: products });
         for (const p of products) {
@@ -147,7 +150,7 @@ async function sendAlerts(offers) {
       }
     }
 
-    if (user.whatsapp) {
+    if (wantsWA) {
       // Sort by discount desc, cap at 3 to avoid WhatsApp spam
       const top3 = [...products].sort((a, b) => b.discount_percent - a.discount_percent).slice(0, 3);
       for (const product of top3) {
@@ -182,11 +185,12 @@ function startScheduler() {
     try {
       const offers = db.getActiveOffers();
       if (offers.length === 0) return;
-      const users = db.getUsers().filter(u => u.active);
+      // Only send to active users who have email notifications enabled
+      const users = db.getUsers().filter(u =>
+        u.active && u.email && (u.notify_email == null || u.notify_email !== 0)
+      );
       for (const user of users) {
-        if (user.email) {
-          await notifyUsers([user], null, { digest: true, offers: offers.slice(0, 10) });
-        }
+        await notifyUsers([user], null, { digest: true, offers: offers.slice(0, 10) });
       }
     } catch (e) {
       console.error('[Digest] Error:', e.message);

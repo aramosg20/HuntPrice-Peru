@@ -212,14 +212,16 @@ app.get('/api/stream', (req, res) => {
 app.get('/api/products', (req, res) => {
   try {
     const products = db.getProducts({
-      store: req.query.store,
-      category: req.query.category,
-      minDiscount: req.query.minDiscount,
-      maxPrice: req.query.maxPrice,
-      search: req.query.q,
-      sort: req.query.sort,
-      limit: req.query.limit || 60,
-      offset: req.query.offset || 0
+      store:        req.query.store,
+      category:     req.query.category,
+      storeList:    req.query.stores    ? req.query.stores.split(',').map(s => s.trim()).filter(Boolean) : null,
+      categoryList: req.query.categories ? req.query.categories.split(',').map(s => s.trim()).filter(Boolean) : null,
+      minDiscount:  req.query.minDiscount,
+      maxPrice:     req.query.maxPrice,
+      search:       req.query.q,
+      sort:         req.query.sort,
+      limit:        req.query.limit || 60,
+      offset:       req.query.offset || 0
     });
     res.json({ ok: true, data: products, count: products.length });
   } catch (e) {
