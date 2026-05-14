@@ -324,7 +324,6 @@ input[type="range"] {
   border-radius: var(--radius);
   padding: 18px 20px 20px;
   position: relative;
-  overflow: hidden;
 }
 
 .exclusivos-section::before {
@@ -391,26 +390,29 @@ input[type="range"] {
   transition: transform 0.35s ease;
 }
 
-/* ── Collapse/expand wrapper ────────────────────────────────────────────────── */
+/* ── Collapse/expand wrapper — CSS Grid row trick (no overflow:hidden needed) ── */
 .exclusivos-cards-wrap {
-  max-height: 210px;
-  overflow: hidden;
-  transition: max-height 0.35s ease-out, opacity 0.25s ease-out;
+  display: grid;
+  grid-template-rows: 1fr;
   opacity: 1;
+  transition: grid-template-rows 0.35s ease-out, opacity 0.25s ease-out;
+  overflow: hidden; /* clips the grid row when it collapses to 0fr */
 }
 
 .exclusivos-cards-wrap.collapsed {
-  max-height: 0;
+  grid-template-rows: 0fr;
   opacity: 0;
 }
 
 /* ── Horizontal carousel ────────────────────────────────────────────────────── */
 .exclusivos-cards {
+  min-height: 0;          /* lets the grid row shrink to 0fr */
   display: flex;
+  flex-wrap: nowrap;       /* explicit — cards must never wrap to the next line */
   gap: 12px;
   overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 6px;
+  overflow-y: visible;
+  padding-bottom: 10px;   /* room for the scrollbar without touching cards */
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
 }
@@ -425,6 +427,7 @@ input[type="range"] {
 .excl-card {
   flex-shrink: 0;
   width: 275px;
+  min-width: 275px;        /* belt-and-suspenders: never let the browser shrink cards */
   scroll-snap-align: start;
   background: var(--card);
   border: 1px solid var(--border);
@@ -438,7 +441,7 @@ input[type="range"] {
 }
 
 @media (max-width: 600px) {
-  .excl-card { width: min(82vw, 280px); }
+  .excl-card { width: min(82vw, 280px); min-width: min(82vw, 280px); }
 }
 
 .excl-card:hover {
