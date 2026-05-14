@@ -19,6 +19,8 @@ const state = {
   authToken: localStorage.getItem('hp_auth_token') || null,
   authUser:  JSON.parse(localStorage.getItem('hp_auth_user') || 'null'),
   authPrefs: null,   // loaded from /api/auth/preferences after login
+  // ── Smart search / HuntBot grid override ──
+  gridOverride: null // { source: 'search'|'huntbot', products: [...], query: '' }
 };
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -156,10 +158,56 @@ function updateMaxPrice(val) {
 let searchTimer;
 function handleSearch(val) {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    state.filters.search = val.trim();
+  const q = val.trim();
+  if (!q) {
+    state.gridOverride = null;
+    state.filters.search = '';
     reloadProducts();
-  }, 400);
+    return;
+  }
+  searchTimer = setTimeout(() => executeSmartSearch(q), 700);
+}
+
+function handleSearchKeydown(e) {
+  if (e.key !== 'Enter') return;
+  clearTimeout(searchTimer);
+  const q = e.target.value.trim();
+  if (q) {
+    executeSmartSearch(q);
+  } else {
+    state.gridOverride = null;
+    state.filters.search = '';
+    reloadProducts();
+  }
+}
+
+async function executeSmartSearch(query) {
+  if (!query) {
+    state.gridOverride = null;
+    state.filters.search = '';
+    return reloadProducts();
+  }
+  const grid = document.getElementById('productsGrid');
+  if (grid) grid.innerHTML = buildSkeletons(8);
+  try {
+    const json = await apiFetch('/api/search/smart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
+    });
+    state.gridOverride = { source: 'search', products: json.products, query };
+    const countEl = document.getElementById('resultsCount');
+    if (countEl) countEl.textContent = `${json.products.length} resultado${json.products.length !== 1 ? 's' : ''}`;
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+    renderProducts(json.products, true);
+    if (json.products.length === 0) showToast('🔍', 'Sin resultados', `No encontré productos para "${query}"`);
+  } catch (e) {
+    // Fallback to plain text filter
+    state.gridOverride = null;
+    state.filters.search = query;
+    reloadProducts();
+  }
 }
 
 // ─── Sort ──────────────────────────────────────────────────────────────────────
@@ -184,6 +232,7 @@ function resetFilters() {
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 function reloadProducts() {
+  state.gridOverride = null;
   state.offset = 0;
   state.products = [];
   return loadProducts(true);
@@ -984,7 +1033,6 @@ async function executeDashboardAction(action) {
     state.filters = { store: action.value, category: '', minDiscount: 0, maxPrice: '', search: '', sort: 'newest' };
     document.querySelectorAll('.chip.active').forEach(el => el.classList.remove('active'));
     document.querySelectorAll(`[data-store="${action.value}"]`).forEach(el => el.classList.add('active'));
-    const searchEl = document.getElementById('searchInput'); if (searchEl) searchEl.value = '';
     await reloadProducts();
     const count = document.querySelectorAll('.product-card').length;
     showToast('🔍', 'Filtro aplicado', `${count} oferta${count !== 1 ? 's' : ''} de ${action.value}`);
@@ -995,7 +1043,6 @@ async function executeDashboardAction(action) {
     state.filters = { store: '', category: action.value, minDiscount: 0, maxPrice: '', search: '', sort: 'newest' };
     document.querySelectorAll('.chip.active').forEach(el => el.classList.remove('active'));
     document.querySelectorAll(`[data-cat="${action.value}"]`).forEach(el => el.classList.add('active'));
-    const searchEl = document.getElementById('searchInput'); if (searchEl) searchEl.value = '';
     await reloadProducts();
     const count = document.querySelectorAll('.product-card').length;
     showToast('🔍', 'Filtro aplicado', `${count} resultado${count !== 1 ? 's' : ''} en ${action.value}`);
@@ -1003,14 +1050,9 @@ async function executeDashboardAction(action) {
     return `🔍 Encontré ${count} resultado${count !== 1 ? 's' : ''} en ${action.value} en el dashboard.`;
 
   } else if (action.type === 'show_product') {
-    state.filters = { store: '', category: '', minDiscount: 0, maxPrice: '', search: '', sort: 'newest' };
-    document.querySelectorAll('.chip.active').forEach(el => el.classList.remove('active'));
     const searchTerm = (action.productName || '').split(' ').slice(0, 4).join(' ');
-    state.filters.search = searchTerm;
-    const searchEl = document.getElementById('searchInput');
-    if (searchEl) searchEl.value = searchTerm;
-    await reloadProducts();
-    const count = document.querySelectorAll('.product-card').length;
+    await executeSmartSearch(searchTerm);
+    const count = state.gridOverride ? state.gridOverride.products.length : 0;
     showToast('🔍', 'Buscando en dashboard', `${count} resultado${count !== 1 ? 's' : ''}`);
     setTimeout(() => highlightDashboardProduct(action.productId), 300);
     const linkPart = action.productUrl ? ` — <a href="${escHtml(action.productUrl)}" target="_blank" rel="noopener" style="color:var(--orange)">Ver en tienda ↗</a>` : '';
@@ -1021,22 +1063,21 @@ async function executeDashboardAction(action) {
 
 async function executeFilterAction(fa) {
   if (!fa || !fa.query) return null;
-  // Clear active chips and set the search filter directly
-  state.filters = { store: '', category: '', minDiscount: 0, maxPrice: '', search: fa.query, sort: 'newest' };
-  document.querySelectorAll('.chip.active').forEach(el => el.classList.remove('active'));
 
-  // Write to the search input and dispatch input event so it visually activates
-  const searchEl = document.getElementById('searchInput');
-  if (searchEl) {
-    searchEl.value = fa.query;
-    // Clear the debounce timer so our direct reloadProducts() call wins
-    clearTimeout(searchTimer);
+  if (fa.products && fa.products.length > 0) {
+    // Embedded products from HuntBot — render directly, never touch the search bar
+    state.gridOverride = { source: 'huntbot', products: fa.products, query: fa.query };
+    renderProducts(fa.products, true);
+    const countEl = document.getElementById('resultsCount');
+    if (countEl) countEl.textContent = `${fa.products.length} resultado${fa.products.length !== 1 ? 's' : ''}`;
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+  } else {
+    // No embedded products — fall back to smart search
+    await executeSmartSearch(fa.query);
   }
 
-  await reloadProducts();
-  const count = document.querySelectorAll('.product-card').length;
-
-  // Scroll dashboard into view (the products grid, not just first card)
+  const count = state.gridOverride ? state.gridOverride.products.length : 0;
   const grid = document.getElementById('productsGrid');
   if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -1044,7 +1085,7 @@ async function executeFilterAction(fa) {
     showToast('🔍', 'Resultados en dashboard', `${count} producto${count !== 1 ? 's' : ''} encontrados`);
     return `🔍 Mostrando ${count} resultado${count !== 1 ? 's' : ''} en el dashboard ↑`;
   }
-  return `🔍 No encontré productos con "${fa.query}" en este momento.`;
+  return `🔍 No encontré productos con "${escHtml(fa.query)}" en este momento.`;
 }
 
 function highlightDashboardProduct(productId) {
@@ -1842,6 +1883,8 @@ window.filterStore = filterStore;
 window.filterCategory = filterCategory;
 window.updateSort = updateSort;
 window.handleSearch = handleSearch;
+window.handleSearchKeydown = handleSearchKeydown;
+window.executeSmartSearch = executeSmartSearch;
 window.resetFilters = resetFilters;
 window.openModal = openModal;
 window.closeModal = closeModal;

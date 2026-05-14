@@ -183,7 +183,7 @@
     <div class="products-toolbar">
       <div class="search-box">
         <span class="search-icon">🔍</span>
-        <input type="search" id="searchInput" placeholder="Buscar producto..." oninput="handleSearch(this.value)">
+        <input type="search" id="searchInput" placeholder="Buscar producto..." oninput="handleSearch(this.value)" onkeydown="handleSearchKeydown(event)">
       </div>
       <select class="sort-select" id="sortSelect" onchange="updateSort(this.value)">
         <option value="newest" selected>Novedades</option>

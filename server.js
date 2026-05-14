@@ -453,7 +453,8 @@ app.post('/api/chat', async (req, res) => {
       filterAction = {
         type: 'search',
         query: primaryKeyword,
-        product_ids: keywordHits.map(p => p.id)
+        product_ids: keywordHits.map(p => p.id),
+        products: keywordHits.slice(0, 30)
       };
     }
 
@@ -1078,6 +1079,71 @@ app.post('/api/share-product/:id', requireAuth, async (req, res) => {
       return res.json({ ok: false, error: 'No tienes canales de notificación activos. Actívalos en tus preferencias.' });
     }
     res.json({ ok: true, message: `Información enviada a tus canales activados (${sent.join(' y ')})` });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── Smart Search ─────────────────────────────────────────────────────────────
+
+app.post('/api/search/smart', async (req, res) => {
+  try {
+    const { query } = req.body;
+    if (!query || typeof query !== 'string' || !query.trim()) {
+      return res.status(400).json({ ok: false, error: 'Query requerida' });
+    }
+    const q = query.trim().slice(0, 200);
+
+    let terms = extractSearchKeywords(q);
+
+    const apiKey = process.env.GEMINI_API_KEY || db.getConfig('gemini_api_key');
+    if (apiKey) {
+      try {
+        const prompt = `Dado el término de búsqueda del usuario, devuelve un array JSON con palabras clave (sinónimos, marcas, variantes) que ayuden a encontrar productos en una base de datos de tiendas peruanas (Falabella, Ripley, Sodimac, etc.). Devuelve SOLO un array JSON de strings, sin explicación. Máximo 12 términos. Término: "${q}"`;
+        const body = JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 200, temperature: 0.1 }
+        });
+        const geminiTerms = await new Promise((resolve, reject) => {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+          const parsed = new URL(url);
+          const options = {
+            hostname: parsed.hostname,
+            path: parsed.pathname + parsed.search,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+          };
+          const r2 = https.request(options, (r) => {
+            let data = '';
+            r.on('data', chunk => { data += chunk; });
+            r.on('end', () => {
+              try {
+                const json = JSON.parse(data);
+                const text = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                const match = text.match(/\[[\s\S]*?\]/);
+                if (match) {
+                  const arr = JSON.parse(match[0]);
+                  if (Array.isArray(arr)) return resolve(arr.map(s => String(s).toLowerCase().trim()).filter(Boolean));
+                }
+                resolve([]);
+              } catch (_) { resolve([]); }
+            });
+          });
+          r2.on('error', reject);
+          r2.setTimeout(8000, () => { r2.destroy(new Error('Timeout')); });
+          r2.write(body);
+          r2.end();
+        });
+        if (geminiTerms.length > 0) {
+          terms = [...new Set([...terms, ...geminiTerms])];
+        }
+      } catch (_) { /* use local terms on Gemini failure */ }
+    }
+
+    if (terms.length === 0) terms = [q.toLowerCase()];
+
+    const products = db.searchProductsByKeyword(terms, 60);
+    res.json({ ok: true, products, terms, count: products.length });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
