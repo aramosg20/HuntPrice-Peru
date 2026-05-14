@@ -7,26 +7,10 @@ const STORE = 'Sodimac';
 const BASE  = 'https://www.sodimac.com.pe';
 const UA    = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
+// Block ONLY heavy static assets — fetch/xhr MUST flow freely for GraphQL / API calls.
 const BLOCKED_TYPES = new Set(['image', 'stylesheet', 'font', 'media']);
 
-// Tracker / analytics domains that keep the network busy without providing
-// product data — blocking them prevents networkidle from hanging indefinitely.
-const BLOCKED_DOMAINS = [
-  'google-analytics.com', 'googletagmanager.com', 'doubleclick.net',
-  'hotjar.com', 'newrelic.com', 'nr-data.net', 'tealiumiq.com',
-  'segment.io', 'amplitude.com', 'bat.bing.com', 'omtrdc.net',
-  'demdex.net', 'adobedtm.com', 'scorecardresearch.com', 'fbcdn.net',
-];
-
-function isTrackerUrl(url) {
-  for (const d of BLOCKED_DOMAINS) {
-    if (url.includes(d)) return true;
-  }
-  return false;
-}
-
-// Direct category paths — these serve real product grids with __NEXT_DATA__ intact.
-// /search?Ntt= routes have inconsistent behaviour on the Falabella-stack Sodimac site.
+// Direct category paths — serve real product grids with __NEXT_DATA__ intact.
 const CATEGORIAS_BASE = [
   `${BASE}/sodimac-pe/category/cat10020/herramientas-electricas`,
   `${BASE}/sodimac-pe/category/cat10032/pisos`,
@@ -54,36 +38,43 @@ function log(event, data = {}) {
 async function scrapeCategory(ctx, categoryUrl) {
   const page = await ctx.newPage();
   try {
-    // Block heavy resources AND known trackers — avoids networkidle hangs.
+    // Exclusively block heavy static resources; every fetch/xhr must reach the server.
     await page.route('**/*', route => {
-      const req = route.request();
-      if (BLOCKED_TYPES.has(req.resourceType())) return route.abort();
-      if (isTrackerUrl(req.url())) return route.abort();
+      if (BLOCKED_TYPES.has(route.request().resourceType())) return route.abort();
       return route.continue();
     });
 
-    // Plan A: intercept Falabella-stack internal API calls that carry product JSON.
+    // Plan A: Promise-based GraphQL / XHR interception.
+    // resolveProducts() fires as soon as ≥4 products arrive; the 10 s race is the safety timeout.
     const apiProducts = [];
+    let resolveProducts;
+    const productsReady = new Promise(resolve => { resolveProducts = resolve; });
+
     page.on('response', async resp => {
       try {
+        const type = resp.request().resourceType();
+        if (type !== 'fetch' && type !== 'xhr') return;
+        if (!resp.url().includes('sodimac.com')) return;
         const ct = resp.headers()['content-type'] || '';
-        if (!ct.includes('json') || !resp.url().includes('sodimac.com')) return;
+        if (!ct.includes('json')) return;
         const json = await resp.json().catch(() => null);
-        if (json) extractFromApiJson(json, apiProducts);
+        if (!json) return;
+        const before = apiProducts.length;
+        extractFromApiJson(json, apiProducts);
+        if (apiProducts.length > before && apiProducts.length >= 4) resolveProducts();
       } catch (_) {}
     });
 
-    // domcontentloaded is fast; SPA fires API calls shortly after.
     await page.goto(categoryUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    // Allow initial XHR calls to resolve without waiting for full network idle.
-    await page.waitForTimeout(4000);
+    // Wait up to 10 s for XHR/GraphQL data; resolves early when enough products arrive.
+    await Promise.race([productsReady, new Promise(r => setTimeout(r, 10000))]);
 
     if (apiProducts.length > 0) {
       log('scrape_api_captured', { url: categoryUrl, count: apiProducts.length });
       return apiProducts;
     }
 
-    // Plan B: __NEXT_DATA__ injected by Next.js SSR — no extra wait needed.
+    // Plan B: __NEXT_DATA__ injected by Next.js SSR into initial HTML.
     const html = await page.content();
     const nextDataProducts = extractFromNextData(html);
     if (nextDataProducts.length > 0) {
@@ -91,7 +82,7 @@ async function scrapeCategory(ctx, categoryUrl) {
       return nextDataProducts;
     }
 
-    // Plan C: live DOM evaluation with a short selector timeout as last resort.
+    // Plan C: live DOM evaluation with a short selector wait as last resort.
     log('scrape_dom_fallback', { url: categoryUrl });
     try {
       await page.waitForSelector('a.pod-link, [data-pod], [class*="pod-link"]', { timeout: 5000 });
@@ -120,8 +111,8 @@ async function scrapeCategory(ctx, categoryUrl) {
           ).trim();
           if (!name || name.length < 3) continue;
 
-          const saleEl  = pod.querySelector('[class*="price-sale"], [class*="sale-price"], [class*="price--sale"]');
-          const origEl  = pod.querySelector('[class*="price-crossed"], [class*="crossed"], [class*="price--normal"]');
+          const saleEl   = pod.querySelector('[class*="price-sale"], [class*="sale-price"], [class*="price--sale"]');
+          const origEl   = pod.querySelector('[class*="price-crossed"], [class*="crossed"], [class*="price--normal"]');
           const current  = parseFloat((saleEl?.textContent || '').replace(/[^\d,.]/g, '').replace(',', '.')) || 0;
           const original = parseFloat((origEl?.textContent || '').replace(/[^\d,.]/g, '').replace(',', '.')) || 0;
           if (!current || current < 5 || !original || original <= current) continue;
@@ -158,43 +149,61 @@ async function scrapeCategory(ctx, categoryUrl) {
   }
 }
 
+// Extracts a single Sodimac product item into `out`. Shared by API and GraphQL paths.
+function extractSodimacItem(item, out) {
+  try {
+    const name = cleanTitle(item.displayName || '');
+    if (!name || name.length < 3) return;
+    const rawUrl = item.url || '';
+    if (!rawUrl) return;
+    const prices   = item.prices || [];
+    const saleObj  = prices.find(p => !p.crossed);
+    const normObj  = prices.find(p =>  p.crossed);
+    const current  = parsePrice(saleObj?.price);
+    const original = parsePrice(normObj?.price);
+    if (!current || !original || original <= current) return;
+    const discount = Math.round(((original - current) / original) * 100);
+    if (discount < 1 || discount > 100) return;
+    const fullUrl = rawUrl.startsWith('http') ? rawUrl : BASE + rawUrl;
+    out.push({
+      store: STORE, name: name.substring(0, 120),
+      sku: urlToSku(fullUrl),
+      category: guessCategory(name),
+      url: fullUrl,
+      image_url: cleanScene7Url((item.mediaUrls || [])[0] || ''),
+      current_price: current,
+      original_price: Math.round(original * 100) / 100,
+      discount_percent: discount,
+      stock_info: null,
+    });
+  } catch (_) {}
+}
+
 function extractFromApiJson(json, out) {
-  const results = (
+  // Known Falabella-stack REST shapes
+  let results = (
     json?.results ||
     json?.data?.results ||
     json?.searchResults?.results ||
     json?.props?.pageProps?.results ||
-    []
+    null
   );
-  if (!Array.isArray(results) || results.length === 0) return;
-  for (const item of results.slice(0, 48)) {
-    try {
-      const name = cleanTitle(item.displayName || '');
-      if (!name || name.length < 3) continue;
-      const rawUrl = item.url || '';
-      if (!rawUrl) continue;
-      const prices   = item.prices || [];
-      const saleObj  = prices.find(p => !p.crossed);
-      const normObj  = prices.find(p =>  p.crossed);
-      const current  = parsePrice(saleObj?.price);
-      const original = parsePrice(normObj?.price);
-      if (!current || !original || original <= current) continue;
-      const discount = Math.round(((original - current) / original) * 100);
-      if (discount < 1 || discount > 100) continue;
-      const fullUrl = rawUrl.startsWith('http') ? rawUrl : BASE + rawUrl;
-      out.push({
-        store: STORE, name: name.substring(0, 120),
-        sku: urlToSku(fullUrl),
-        category: guessCategory(name),
-        url: fullUrl,
-        image_url: cleanScene7Url((item.mediaUrls || [])[0] || ''),
-        current_price: current,
-        original_price: Math.round(original * 100) / 100,
-        discount_percent: discount,
-        stock_info: null,
-      });
-    } catch (_) {}
+
+  // GraphQL: walk json.data.* one level deep for arrays that look like product lists.
+  if (!results && json?.data && typeof json.data === 'object') {
+    for (const node of Object.values(json.data)) {
+      if (!node || typeof node !== 'object') continue;
+      const candidate = node?.results || node?.products?.results || node?.items;
+      if (Array.isArray(candidate) && candidate.length > 0 &&
+          (candidate[0]?.displayName || candidate[0]?.url)) {
+        results = candidate;
+        break;
+      }
+    }
   }
+
+  if (!Array.isArray(results) || results.length === 0) return;
+  for (const item of results.slice(0, 48)) extractSodimacItem(item, out);
 }
 
 function extractFromNextData(html) {
@@ -208,33 +217,9 @@ function extractFromNextData(html) {
   const out  = [];
   const seen = new Set();
   for (const item of results) {
-    try {
-      const name = cleanTitle(item.displayName || '');
-      if (!name || name.length < 3) continue;
-      const rawUrl = item.url || '';
-      if (!rawUrl || seen.has(rawUrl)) continue;
-      seen.add(rawUrl);
-      const prices   = item.prices || [];
-      const saleObj  = prices.find(p => !p.crossed);
-      const normObj  = prices.find(p =>  p.crossed);
-      const current  = parsePrice(saleObj?.price);
-      const original = parsePrice(normObj?.price);
-      if (!current || !original || original <= current) continue;
-      const discount = Math.round(((original - current) / original) * 100);
-      if (discount < 1 || discount > 100) continue;
-      const fullUrl = rawUrl.startsWith('http') ? rawUrl : BASE + rawUrl;
-      out.push({
-        store: STORE, name: name.substring(0, 120),
-        sku: urlToSku(fullUrl),
-        category: guessCategory(name),
-        url: fullUrl,
-        image_url: cleanScene7Url((item.mediaUrls || [])[0] || ''),
-        current_price: current,
-        original_price: Math.round(original * 100) / 100,
-        discount_percent: discount,
-        stock_info: null,
-      });
-    } catch (_) {}
+    const before = out.length;
+    extractSodimacItem(item, out);
+    if (out.length > before) seen.add(out[out.length - 1].url);
   }
   return out;
 }
