@@ -252,11 +252,17 @@ async function scrapeCategory(context, categoryUrl, seen, maxPagesPerCat, mode) 
       const ct = response.headers()['content-type'] || '';
       if (!ct.includes('json')) return;
       const isListingApi =
-        url.includes('/s/browse/')     ||
-        url.includes('/api/listing')   ||
-        url.includes('catalog-detail') ||
-        url.includes('search/v1')      ||
-        url.includes('listing-page');
+        url.includes('/s/browse/')        ||
+        url.includes('/s/search')         ||
+        url.includes('/api/listing')      ||
+        url.includes('/api/products')     ||
+        url.includes('/api/catalog')      ||
+        url.includes('catalog-detail')    ||
+        url.includes('search/v1')         ||
+        url.includes('listing-page')      ||
+        url.includes('/products/search')  ||
+        // Catch-all for Falabella's versioned internal listing APIs
+        (url.includes('falabella.com') && /\/v\d+\/(product|catalog|listing|search)/.test(url));
       if (!isListingApi) return;
       const json = await response.json().catch(() => null);
       if (json) intercepted.push(json);
@@ -268,9 +274,18 @@ async function scrapeCategory(context, categoryUrl, seen, maxPagesPerCat, mode) 
     // ── Page 1: full navigation ─────────────────────────────────────────────
     await page.goto(categoryUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
+    // /category/ pages hydrate the product grid client-side after SSR.
+    // Wait up to 8 s for any recognisable pod element before reading the DOM.
+    if (categoryUrl.includes('/category/')) {
+      await page.waitForSelector(
+        '[data-pod], [class*="pod-capsule"], [class*="pod--sku"], [class*="grid-pod"]',
+        { timeout: 8000 }
+      ).catch(() => {});
+    }
+
     const nd      = await extractNextData(page);
     const buildId = nd?.buildId || null;
-    let rawItems  = resultsFromNd(nd);
+    let rawItems  = resultsFromNd(nd);          // Level B: __NEXT_DATA__
 
     // Level A: prefer intercepted API data if richer than __NEXT_DATA__
     if (intercepted.length > 0) {
@@ -280,10 +295,22 @@ async function scrapeCategory(context, categoryUrl, seen, maxPagesPerCat, mode) 
       }
     }
 
-    // Level C: DOM fallback
+    // Level C: DOM extraction
     if (rawItems.length === 0) {
-      console.warn(`[${STORE}] Fallback DOM en ${categoryUrl}`);
       rawItems = await extractFromDom(page, categoryUrl);
+    }
+
+    // Diagnostics — explain exactly WHY we got nothing before giving up
+    if (rawItems.length === 0) {
+      const pp         = nd?.props?.pageProps || {};
+      const ppKeys     = Object.keys(pp).slice(0, 15).join(', ') || '(sin pageProps)';
+      const currentUrl = page.url();
+      const isCaptcha  = /captcha|challenge|robot/i.test(currentUrl);
+      console.warn(
+        `[${STORE}] 0 items | ruta: ${new URL(categoryUrl).pathname} | ` +
+        `pageProps keys: [${ppKeys}] | XHR: ${intercepted.length} | ` +
+        (isCaptcha ? '⚠ CAPTCHA detectado' : `url actual: ${currentUrl.slice(0, 80)}`)
+      );
     }
 
     parseAndAdd(rawItems, products, seen, categoryUrl);
@@ -387,18 +414,37 @@ async function extractNextData(page) {
   } catch (_) { return null; }
 }
 
-/** Try all known paths where Falabella puts the products array in pageProps. */
+/**
+ * Try all known paths where Falabella puts the products array in pageProps.
+ * /collection/ pages tend to use shallow paths (pp.results).
+ * /category/   pages tend to use deeper paths (pp.initialData.data.results, etc.)
+ */
 function resultsFromNd(nd) {
   if (!nd) return [];
   const pp = nd?.props?.pageProps;
   if (!pp) return [];
-  return pp.results
-      || pp.searchResults?.results
-      || pp.initialData?.results
-      || pp.data?.results
-      || pp.pageData?.results
-      || pp.listingData?.results
-      || [];
+
+  // ── /collection/ shapes ───────────────────────────────────────────────────
+  if (pp.results?.length)                         return pp.results;
+  if (pp.searchResults?.results?.length)          return pp.searchResults.results;
+  if (pp.listingData?.results?.length)            return pp.listingData.results;
+  if (pp.pageData?.results?.length)               return pp.pageData.results;
+
+  // ── /category/ shapes ─────────────────────────────────────────────────────
+  if (pp.initialData?.results?.length)            return pp.initialData.results;
+  if (pp.initialData?.data?.results?.length)      return pp.initialData.data.results;
+  if (pp.initialData?.products?.length)           return pp.initialData.products;
+  if (pp.initialData?.data?.products?.length)     return pp.initialData.data.products;
+  if (pp.categoryData?.results?.length)           return pp.categoryData.results;
+  if (pp.categoryData?.products?.length)          return pp.categoryData.products;
+  if (pp.data?.results?.length)                   return pp.data.results;
+  if (pp.data?.products?.length)                  return pp.data.products;
+  if (pp.products?.length)                        return pp.products;
+  if (pp.page?.results?.length)                   return pp.page.results;
+  if (pp.page?.products?.length)                  return pp.page.products;
+
+  // ── Last resort: walk the whole pageProps tree ────────────────────────────
+  return deepFindProducts(pp) || [];
 }
 
 function totalCountFromNd(nd) {
@@ -410,6 +456,9 @@ function totalCountFromNd(nd) {
       || pp.pagination?.count
       || pp.searchResults?.pagination?.total
       || pp.pageData?.pagination?.total
+      || pp.initialData?.pagination?.total
+      || pp.initialData?.data?.pagination?.total
+      || pp.categoryData?.pagination?.total
       || 0;
 }
 
@@ -445,22 +494,49 @@ async function fetchNdPage(page, ndBase, pageNum) {
   } catch (_) { return null; }
 }
 
-/** Level C fallback: scrape product card DOM elements directly. */
+/**
+ * Level C fallback: scrape product card DOM elements directly.
+ * Uses a layered selector list ordered from most-specific to broadest so the
+ * first successful match wins without needing the exact class name.
+ */
 async function extractFromDom(page, sourceUrl) {
-  try {
-    await page.waitForSelector(
-      '[class*="pod"][class*="sku"], .pod--sku, [data-pod="pod"]',
-      { timeout: 5000 }
-    ).catch(() => {});
+  // Ordered from most stable (data-attrs) to most fragile (class partials)
+  const CARD_SELECTORS = [
+    '[data-pod]',
+    '[data-id][data-name]',
+    '[class*="pod-capsule"]',
+    '[class*="grid-pod"]',
+    '[class*="pod--sku"]',
+    'article[class*="pod"]',
+    'li[class*="pod"]',
+    '[class*="product-item"]',
+    '[class*="product-card"]',
+  ].join(', ');
 
-    return await page.$$eval(
-      '[class*="pod"][class*="sku"], .pod--sku, [data-pod="pod"]',
-      (cards, src) => cards.map(card => {
-        const nameEl  = card.querySelector('[class*="pod-title"], [class*="pod-header"]');
-        const priceEl = card.querySelector('[class*="buy-price"], [class*="price--best"], [class*="subprice__bulk"]');
-        const origEl  = card.querySelector('[class*="crossed"], [class*="normal-price"]');
-        const imgEl   = card.querySelector('img[src], img[data-src]');
-        const linkEl  = card.querySelector('a[href*="/product/"]');
+  try {
+    // Give the page up to 8 s to render the grid (covers client-side hydration)
+    const found = await page.waitForSelector(CARD_SELECTORS, { timeout: 8000 })
+      .catch(() => null);
+
+    if (!found) {
+      console.warn(`[${STORE}] DOM: ningún selector de tarjetas encontró elementos en ${new URL(sourceUrl).pathname}`);
+      return [];
+    }
+
+    const cards = await page.$$eval(
+      CARD_SELECTORS,
+      (nodes, src) => nodes.map(card => {
+        const nameEl  = card.querySelector(
+          '[class*="pod-title"], [class*="pod-header"], [class*="display-name"], [class*="product-title"]'
+        );
+        const priceEl = card.querySelector(
+          '[class*="buy-price"], [class*="price--best"], [class*="subprice__bulk"], [class*="prices-0"], [class*="price_main"]'
+        );
+        const origEl  = card.querySelector(
+          '[class*="crossed"], [class*="normal-price"], [class*="prices-1"], [class*="line-through"]'
+        );
+        const imgEl   = card.querySelector('img[src], img[data-src], img[srcset]');
+        const linkEl  = card.querySelector('a[href*="/product/"], a[href]');
         return {
           displayName: nameEl?.textContent?.trim() || '',
           prices: [
@@ -473,6 +549,11 @@ async function extractFromDom(page, sourceUrl) {
       }),
       sourceUrl
     ).catch(() => []);
+
+    if (cards.length === 0) {
+      console.warn(`[${STORE}] DOM: selector matcheó pero $$eval devolvió 0 tarjetas — posible layout diferente en ${new URL(sourceUrl).pathname}`);
+    }
+    return cards;
   } catch (_) { return []; }
 }
 
@@ -580,6 +661,33 @@ async function runWithConcurrency(items, limit, fn) {
   await Promise.all(
     Array.from({ length: Math.min(limit, items.length) }, worker)
   );
+}
+
+/**
+ * Recursively walk a pageProps sub-tree looking for the first array whose
+ * items look like Falabella product objects.  Used as last-resort fallback
+ * when none of the known static paths match.
+ */
+function deepFindProducts(obj, depth = 0) {
+  if (depth > 7 || !obj || typeof obj !== 'object') return null;
+  if (Array.isArray(obj)) {
+    if (obj.length >= 2 && isProductLike(obj[0])) return obj;
+    return null;
+  }
+  const SKIP_KEYS = new Set(['query', 'variables', 'errors', '__typename', 'headers', 'cookies']);
+  for (const [key, val] of Object.entries(obj)) {
+    if (SKIP_KEYS.has(key)) continue;
+    const found = deepFindProducts(val, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+function isProductLike(item) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+  const hasName  = !!(item.displayName || item.name || item.title);
+  const hasPrice = !!(item.prices || item.price || item.currentPrice || item.normalPrice);
+  return hasName && hasPrice;
 }
 
 /** Pick a random User-Agent from the pool. */
