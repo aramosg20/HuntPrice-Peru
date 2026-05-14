@@ -379,9 +379,12 @@
   async function loadScrapeLogs() {
     try {
       const { data } = await adminFetch('/api/admin/scrape-logs');
-      document.getElementById('scrapeLogs').innerHTML = data.slice(0,30).map(log => {
+      document.getElementById('scrapeLogs').innerHTML = data
+        .sort((a, b) => new Date(b.finished_at.replace(' ','T')+'Z') - new Date(a.finished_at.replace(' ','T')+'Z'))
+        .slice(0,30).map(log => {
         const statusCls = log.status === 'ok' ? 'status-ok' : 'status-error';
-        const ts = new Date(log.finished_at).toLocaleString('es-PE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+        const ts = new Date(log.finished_at.replace(' ','T')+'Z')
+          .toLocaleString('es-PE',{timeZone:'America/Lima',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
         return `<tr>
           <td><strong>${log.store}</strong></td>
           <td class="${statusCls}">${log.status.toUpperCase()}</td>

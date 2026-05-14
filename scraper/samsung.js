@@ -1,334 +1,232 @@
 'use strict';
-const { execFileSync } = require('child_process');
-
-// DESHABILITADO: Samsung PE carga productos 100% client-side (AEM + JS).
-// El endpoint AJAX (/pe/common/ajax/getAllGalleryProductList.do) fue eliminado (HTTP 404).
-// searchapi.samsung.com/v6 y esapi.samsung.com no tienen endpoints accesibles sin sesión.
-// Requiere Playwright para interceptar la llamada XHR real.
-// TODO: implementar en producción (Railway) donde hay RAM suficiente para Playwright.
-//       En desarrollo (Termux) la RAM no alcanza para correr un browser headless.
-const ENABLED = false;
+const { chromium } = require('playwright');
 
 const STORE = 'Samsung';
-const BASE = 'https://www.samsung.com';
-const UA = 'Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
+const BASE  = 'https://www.samsung.com';
+const UA    = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-const HTML_URLS = [
-  `${BASE}/pe/offer/`,
+// Resource types that waste bandwidth — only HTML/scripts pass through
+const BLOCKED_TYPES = new Set(['image', 'stylesheet', 'font', 'media']);
+
+const CATEGORY_URLS = [
   `${BASE}/pe/smartphones/all-smartphones/`,
-  `${BASE}/pe/televisions/all-televisions/`,
   `${BASE}/pe/tablets/all-tablets/`,
-  `${BASE}/pe/laptops/all-laptops/`,
 ];
 
-// Samsung PE public product listing API (returns JSON with price data)
-const SAMSUNG_API_URLS = [
-  `${BASE}/pe/common/ajax/getAllGalleryProductList.do?type=2&category=MN&listType=list&prd_sort=PD0014&start=0&end=30`,
-  `${BASE}/pe/common/ajax/getAllGalleryProductList.do?type=2&category=SM&listType=list&prd_sort=PD0014&start=0&end=30`,
-  `${BASE}/pe/common/ajax/getAllGalleryProductList.do?type=2&category=TV&listType=list&prd_sort=PD0014&start=0&end=30`,
-];
+const MAX_PER_CATEGORY = 40;
 
 function log(event, data = {}) {
   console.log(JSON.stringify({ level: 'info', store: STORE, event, timestamp: new Date().toISOString(), ...data }));
 }
 
-async function ping(state, extra = '') {
-  const key = process.env.CRONITOR_API_KEY;
-  if (!key) return;
-  try { await fetch(`https://cronitor.link/p/${key}/huntprice-scraper-samsung?state=${state}${extra}`); } catch (_) {}
+function guessCategory(name) {
+  const n = name.toLowerCase();
+  if (/galaxy s|galaxy a|celular|smartphone/.test(n)) return 'Celulares';
+  if (/galaxy tab|tablet/.test(n))                   return 'Computación';
+  if (/qled|neo qled|oled|frame|tv|televisor/.test(n)) return 'Electrónica';
+  if (/galaxy book|laptop/.test(n))                  return 'Computación';
+  if (/galaxy buds|audifonos|auricular|soundbar/.test(n)) return 'Electrónica';
+  if (/lavadora|refrigerador|microondas/.test(n))    return 'Electrohogar';
+  return 'Tecnología';
 }
 
-function isBlocked(html) {
-  const lower = (html || '').toLowerCase();
-  return ['captcha', 'are you a robot', 'cf-browser-verification', 'cf_chl_', 'just a moment...', 'checking your browser', 'access denied'].some(s => lower.includes(s));
+// Parse "S/ 6,899.00" or "s/ 383.28" → 6899 / 383.28
+function parseSoles(text) {
+  const matches = [...text.matchAll(/[Ss]\/\s*([\d,]+(?:\.\d{1,2})?)/g)];
+  return matches.map(m => parseFloat(m[1].replace(/,/g, '')) || 0).filter(v => v > 0);
 }
 
-function buildHtmlArgs(url) {
-  return [
-    '-s', '-L', '--max-time', '30',
-    '-H', `User-Agent: ${UA}`,
-    '-H', 'Accept: text/html,application/xhtml+xml,*/*;q=0.9',
-    '-H', 'Accept-Language: es-PE,es;q=0.9,en;q=0.8',
-    '-H', 'Accept-Encoding: gzip, deflate, br',
-    '-H', `Referer: ${BASE}/pe/`,
-    '-H', 'sec-ch-ua: "Chromium";v="124", "Not-A.Brand";v="99"',
-    '-H', 'sec-ch-ua-mobile: ?1',
-    '-H', 'sec-ch-ua-platform: "Android"',
-    '-H', 'sec-fetch-dest: document',
-    '-H', 'sec-fetch-mode: navigate',
-    '-H', 'sec-fetch-site: same-origin',
-    '-H', 'sec-fetch-user: ?1',
-    '-H', 'upgrade-insecure-requests: 1',
-    '--compressed',
-    url,
-  ];
-}
-
-function buildApiArgs(url) {
-  return [
-    '-s', '-L', '--max-time', '20',
-    '-H', `User-Agent: ${UA}`,
-    '-H', 'Accept: application/json, */*',
-    '-H', 'Accept-Language: es-PE,es;q=0.9',
-    '-H', 'Accept-Encoding: gzip, deflate, br',
-    '-H', `Referer: ${BASE}/pe/offer/`,
-    '-H', 'sec-ch-ua: "Chromium";v="124", "Not-A.Brand";v="99"',
-    '-H', 'sec-ch-ua-mobile: ?1',
-    '-H', 'sec-fetch-dest: empty',
-    '-H', 'sec-fetch-mode: cors',
-    '-H', 'sec-fetch-site: same-origin',
-    '--compressed',
-    url,
-  ];
-}
-
-async function fetchHtml(url, attempt = 1) {
+async function scrapeCategory(ctx, categoryUrl) {
+  const page = await ctx.newPage();
   try {
-    const raw = execFileSync('curl', buildHtmlArgs(url), { maxBuffer: 15 * 1024 * 1024, timeout: 35000 }).toString();
-    log('scrape_response', { url, bytes: raw.length, attempt });
-    return raw;
-  } catch (err) {
-    log('scrape_fetch_error', { url, message: err.message, attempt });
-    if (attempt < 3) {
-      await delay(Math.pow(2, attempt) * 1000 + Math.random() * 1000);
-      return fetchHtml(url, attempt + 1);
+    // Intercept and abort heavy resources
+    await page.route('**/*', (route) => {
+      if (BLOCKED_TYPES.has(route.request().resourceType())) return route.abort();
+      return route.continue();
+    });
+
+    // Capture JSON API responses (Samsung sometimes exposes product data via XHR)
+    const apiProducts = [];
+    page.on('response', async (resp) => {
+      try {
+        const ct = resp.headers()['content-type'] || '';
+        if (!ct.includes('json') || !resp.url().includes('samsung.com')) return;
+        const json = await resp.json().catch(() => null);
+        if (json) extractFromApiJson(json, apiProducts);
+      } catch (_) {}
+    });
+
+    await page.goto(categoryUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.waitForTimeout(5000);
+
+    if (apiProducts.length > 0) {
+      log('scrape_api_captured', { url: categoryUrl, count: apiProducts.length });
+      return apiProducts;
     }
-    return null;
+
+    log('scrape_dom_fallback', { url: categoryUrl });
+
+    // ── DOM extraction with exact Samsung PE selectors ──────────────────────
+    const products = await page.evaluate(({ base, max }) => {
+      const results = [];
+      const seen    = new Set();
+
+      // Samsung PE uses pd21-product-card__item for every product card
+      const cards = [...document.querySelectorAll('.pd21-product-card__item')].slice(0, max);
+      if (cards.length === 0) return results;
+
+      for (const card of cards) {
+        try {
+          // Title — class name confirmed from live DOM inspection
+          const titulo = card.querySelector('.pd21-product-card__name-wrap')
+            ?.textContent?.trim() || '';
+          if (!titulo || titulo.length < 3) continue;
+
+          // URL — the image CTA anchor contains the product href
+          const linkEl = card.querySelector('a.pd21-product-card__image-cta[href]');
+          const href   = linkEl?.getAttribute('href') || '';
+          const url    = href.startsWith('http') ? href : (href ? base + href : '');
+          if (!url || seen.has(url)) continue;
+          seen.add(url);
+
+          // Image — lazy-loaded; real URL is always in data-src (not src)
+          // image__main is the primary product image; image__preview is a thumbnail
+          const imgEl  = card.querySelector('img.image__main[data-src]') ||
+                         card.querySelector('img[data-src]');
+          let imagen   = imgEl?.getAttribute('data-src') || '';
+          // Fix protocol-relative URLs
+          if (imagen.startsWith('//')) imagen = 'https:' + imagen;
+
+          // Prices — Samsung shows: "Desde s/ 383.28 en 18 cuotas* o S/ 6,899.00"
+          // The LAST S/ value is the full sale price (the installment is the first)
+          const priceEl = card.querySelector('.pd21-product-card__price');
+          const priceText = priceEl?.textContent || '';
+          const prices  = parseSoles(priceText);
+
+          // Also check for explicit original-price element (shown when discounted)
+          const origEl  = card.querySelector('.price-ux__price-before, .price-original, [class*="before-price"], [class*="original-price"], s, del');
+          const origText = origEl?.textContent || '';
+          const origPrices = parseSoles(origText);
+
+          // Full sale price is the last (largest by position, not necessarily value) S/ match
+          const precio_actual = prices[prices.length - 1] || 0;
+          if (!precio_actual || precio_actual < 50) continue;
+
+          // Original price: use explicit element if present; otherwise equal to sale price
+          const precio_normal = origPrices[0] || precio_actual;
+
+          results.push({ titulo, precio_actual, precio_normal, url, imagen });
+        } catch (_) {}
+      }
+      return results;
+
+      // Inline helper — must live inside page.evaluate
+      function parseSoles(text) {
+        const matches = [...text.matchAll(/[Ss]\/\s*([\d,]+(?:\.\d{1,2})?)/g)];
+        return matches.map(m => parseFloat(m[1].replace(/,/g, '')) || 0).filter(v => v > 0);
+      }
+    }, { base: BASE, max: MAX_PER_CATEGORY });
+
+    log('scrape_dom_extracted', { url: categoryUrl, count: products.length });
+    return products;
+  } finally {
+    await page.close();
   }
 }
 
-async function fetchApi(url, attempt = 1) {
-  try {
-    const raw = execFileSync('curl', buildApiArgs(url), { maxBuffer: 5 * 1024 * 1024, timeout: 25000 }).toString();
-    const trimmed = raw.trim();
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-      log('scrape_api_ok', { url });
-      return JSON.parse(trimmed);
+// Try to pull products out of a JSON API response (XHR interception fallback)
+function extractFromApiJson(json, out) {
+  if (!json || typeof json !== 'object') return;
+  const lists = [
+    json.productList, json.modelList, json.products, json.items,
+    json.response?.productList, json.data?.productList, json.data?.modelList,
+  ];
+  for (const list of lists) {
+    if (!Array.isArray(list) || list.length === 0) continue;
+    for (const item of list.slice(0, 40)) {
+      const titulo = (item.displayName || item.modelName || item.productName || item.name || '').trim();
+      if (!titulo) continue;
+      const precio_actual = parseFloat(String(item.salePrice || item.price || 0).replace(/[^\d.]/g, '')) || 0;
+      if (!precio_actual) continue;
+      const precio_normal = parseFloat(String(item.regularPrice || item.listPrice || 0).replace(/[^\d.]/g, '')) || precio_actual;
+      const rawUrl = item.url || item.pdpUrl || item.productUrl || '';
+      const url = rawUrl.startsWith('http') ? rawUrl : (rawUrl ? BASE + rawUrl : '');
+      let imagen = item.thumbUrl || item.imageUrl || item.image || '';
+      if (imagen.startsWith('//')) imagen = 'https:' + imagen;
+      out.push({ titulo, precio_actual, precio_normal, url, imagen });
     }
-    log('scrape_api_non_json', { url, preview: trimmed.substring(0, 120) });
-    return null;
-  } catch (err) {
-    log('scrape_api_error', { url, message: err.message, attempt });
-    if (attempt < 3) {
-      await delay(Math.pow(2, attempt) * 1000);
-      return fetchApi(url, attempt + 1);
+    if (out.length > 0) return;
+  }
+  for (const key of Object.keys(json)) {
+    const v = json[key];
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      extractFromApiJson(v, out);
+      if (out.length > 0) return;
     }
-    return null;
   }
 }
 
 async function scrape() {
-  if (!ENABLED) {
-    log('scrape_skipped', { reason: 'disabled — requiere Playwright en producción' });
-    return [];
-  }
   log('scrape_started', {});
-  await ping('run');
-  const products = [];
-  const seen = new Set();
-
-  // Attempt 1: Samsung PE internal JSON API
-  for (const apiUrl of SAMSUNG_API_URLS) {
-    const data = await fetchApi(apiUrl);
-    if (data) {
-      const list = data?.productList || data?.modelList || data?.response?.modelList || [];
-      log('scrape_api_items', { url: apiUrl, count: list.length });
-      for (const item of list.slice(0, 40)) tryPushItem(item, products, seen, apiUrl);
-      if (products.length >= 10) break;
-    }
-    await delay(800);
-  }
-
-  // Attempt 2: Next.js pages — __NEXT_DATA__, JSON-LD, digitalData, productList patterns
-  for (const url of HTML_URLS) {
-    if (products.length >= 15) break;
-    try {
-      const html = await fetchHtml(url);
-      if (!html) continue;
-
-      if (isBlocked(html)) {
-        log('scrape_blocked', { url, preview: html.substring(0, 200) });
-        continue;
-      }
-
-      const before = products.length;
-
-      // __NEXT_DATA__
-      const nextMatch = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-      if (nextMatch) {
-        try {
-          const nd = JSON.parse(nextMatch[1]);
-          extractFromNextData(nd, products, seen, url);
-          log('scrape_next_data', { url, productsAfter: products.length });
-        } catch (e) { log('scrape_next_data_error', { url, message: e.message }); }
-      }
-
-      // JSON-LD
-      for (const m of html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)) {
-        try {
-          const schema = JSON.parse(m[1]);
-          extractFromSchema(schema, products, seen, url);
-        } catch (_) {}
-      }
-
-      // Samsung-specific patterns
-      const patterns = [
-        /"productList"\s*:\s*(\[[\s\S]{10,10000}?\])/,
-        /"modelList"\s*:\s*(\[[\s\S]{10,10000}?\])/,
-        /"products"\s*:\s*(\[[\s\S]{10,10000}?\])/,
-        /window\.digitalData\s*=\s*({[\s\S]{50,}?});\s*(?:<\/script>|window\.)/,
-      ];
-      for (const pat of patterns) {
-        const m = html.match(pat);
-        if (m) {
-          try {
-            const obj = JSON.parse(m[1]);
-            if (Array.isArray(obj)) {
-              for (const item of obj.slice(0, 40)) tryPushItem(item, products, seen, url);
-            } else {
-              extractDeep(obj, products, seen, url);
-            }
-          } catch (_) {}
-        }
-      }
-
-      log('scrape_html_done', { url, newProducts: products.length - before });
-    } catch (err) {
-      log('scrape_html_error', { url, message: err.message });
-    }
-    await delay(2000);
-  }
-
-  log('scrape_completed', { productsCount: products.length });
-  await ping(products.length > 0 ? 'complete' : 'fail', `&metric=count:${products.length}`);
-  return products;
-}
-
-function extractFromNextData(nd, products, seen, pageUrl) {
-  if (!nd) return;
-  const pageProps = nd?.props?.pageProps || {};
-  const candidates = [
-    pageProps.productList, pageProps.modelList, pageProps.products,
-    pageProps.data?.productList, pageProps.data?.models, pageProps.data?.modelList,
-    pageProps.initialData?.productList, pageProps.initialData?.modelList,
-    pageProps.componentProps?.modelList,
-  ];
-  for (const list of candidates) {
-    if (Array.isArray(list) && list.length > 0) {
-      for (const item of list.slice(0, 40)) tryPushItem(item, products, seen, pageUrl);
-      if (products.length > 0) return;
-    }
-  }
-  extractDeep(pageProps, products, seen, pageUrl);
-}
-
-function extractDeep(obj, products, seen, pageUrl, depth = 0) {
-  if (!obj || depth > 5 || typeof obj !== 'object') return;
-  if (Array.isArray(obj)) {
-    for (const item of obj.slice(0, 40)) {
-      if (typeof item === 'object') {
-        tryPushItem(item, products, seen, pageUrl);
-        if (products.length < 30) extractDeep(item, products, seen, pageUrl, depth + 1);
-      }
-    }
-  } else {
-    tryPushItem(obj, products, seen, pageUrl);
-    for (const key of Object.keys(obj)) {
-      const val = obj[key];
-      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object') {
-        extractDeep(val, products, seen, pageUrl, depth + 1);
-        if (products.length >= 30) return;
-      } else if (val && typeof val === 'object' && !Array.isArray(val)) {
-        extractDeep(val, products, seen, pageUrl, depth + 1);
-      }
-    }
-  }
-}
-
-function extractFromSchema(schema, products, seen, pageUrl) {
-  if (!schema) return;
-  if (Array.isArray(schema)) { for (const s of schema) extractFromSchema(s, products, seen, pageUrl); return; }
-  if (schema['@type'] === 'Product') {
-    try {
-      const name = (schema.name || '').trim();
-      const url = schema.url || pageUrl;
-      if (!name || seen.has(url)) return;
-      seen.add(url);
-      const offer = Array.isArray(schema.offers) ? schema.offers[0] : (schema.offers || {});
-      const current = parsePrice(offer.price || 0);
-      if (!current) return;
-      const original = parsePrice(offer.highPrice || 0);
-      if (!original || original <= current) return;
-      const discount = Math.round(((original - current) / original) * 100);
-      if (discount < 1 || discount > 100) return;
-      products.push({
-        store: STORE, name: name.substring(0, 120), category: guessCategory(name),
-        url: url.startsWith('http') ? url : BASE + url,
-        image_url: Array.isArray(schema.image) ? schema.image[0] : (schema.image || ''),
-        current_price: current, original_price: original, discount_percent: discount, stock_info: null,
-      });
-    } catch (_) {}
-  }
-  if (schema['@graph']) { for (const s of schema['@graph']) extractFromSchema(s, products, seen, pageUrl); }
-}
-
-function tryPushItem(item, products, seen, pageUrl) {
-  if (!item || typeof item !== 'object') return;
+  const browser = await chromium.launch({ headless: true });
   try {
-    const name = (
-      item.displayName || item.productName || item.modelName ||
-      item.name || item.title || item.productTitle || ''
-    ).trim();
-    if (!name || name.length < 3) return;
-
-    const modelCode = item.modelCode || item.modelId || item.sku || '';
-    const rawPath = item.url || item.pdpUrl || item.productUrl || item.link || '';
-    let url;
-    if (rawPath.startsWith('http')) url = rawPath;
-    else if (rawPath) url = BASE + rawPath;
-    else if (modelCode) url = `${BASE}/pe/search/?searchvalue=${encodeURIComponent(modelCode)}`;
-    else url = `${BASE}/pe/search/?searchvalue=${encodeURIComponent(name.substring(0, 40))}`;
-
-    if (seen.has(url)) return;
-    seen.add(url);
-
-    const current = parsePrice(item.salePrice || item.discountedPrice || item.currentPrice || item.price || item.offerPrice || 0);
-    if (!current || current <= 0) return;
-
-    const original = parsePrice(item.regularPrice || item.listPrice || item.originalPrice || item.normalPrice || item.priceBeforeDiscount || 0);
-    if (!original || original <= current) return;
-    const discount = Math.round(((original - current) / original) * 100);
-    if (discount < 1 || discount > 100) return;
-
-    products.push({
-      store: STORE, name: name.substring(0, 120), category: guessCategory(name), url,
-      image_url: item.thumbUrl || item.imageUrl || item.image || item.thumbnailUrl || '',
-      current_price: current, original_price: Math.round(original * 100) / 100,
-      discount_percent: discount, stock_info: null,
+    const ctx = await browser.newContext({
+      userAgent: UA,
+      locale: 'es-PE',
+      extraHTTPHeaders: { 'Accept-Language': 'es-PE,es;q=0.9,en;q=0.8' },
     });
-  } catch (_) {}
-}
 
-function parsePrice(val) {
-  if (!val) return 0;
-  return parseFloat(String(val).replace(/[^\d.]/g, '')) || 0;
-}
+    const allRaw = [];
+    for (const url of CATEGORY_URLS) {
+      try {
+        const items = await scrapeCategory(ctx, url);
+        log('scrape_category_done', { url, count: items.length });
+        allRaw.push(...items);
+        await new Promise(r => setTimeout(r, 1500));
+      } catch (err) {
+        log('scrape_category_error', { url, message: err.message });
+      }
+    }
 
-function guessCategory(name) {
-  const n = name.toLowerCase();
-  if (/galaxy s|galaxy a|celular|smartphone/.test(n)) return 'Celulares';
-  if (/galaxy tab|tablet/.test(n)) return 'Computación';
-  if (/qled|neo qled|oled|frame|tv|televisor/.test(n)) return 'Electrónica';
-  if (/galaxy book|laptop/.test(n)) return 'Computación';
-  if (/galaxy buds|audifonos|auricular|soundbar/.test(n)) return 'Electrónica';
-  if (/lavadora|refrigerador|microondas/.test(n)) return 'Electrohogar';
-  return 'Tecnología';
-}
+    // Deduplicate and convert to HuntPrice standard format
+    const seen     = new Set();
+    const products = [];
+    for (const r of allRaw) {
+      if (!r.titulo || !r.precio_actual || !r.url || seen.has(r.url)) continue;
+      seen.add(r.url);
+      const discount = r.precio_normal > r.precio_actual
+        ? Math.round(((r.precio_normal - r.precio_actual) / r.precio_normal) * 100)
+        : 0;
+      products.push({
+        store:            STORE,
+        name:             r.titulo.substring(0, 120),
+        category:         guessCategory(r.titulo),
+        url:              r.url,
+        image_url:        r.imagen,
+        current_price:    r.precio_actual,
+        original_price:   r.precio_normal,
+        discount_percent: discount,
+        stock_info:       null,
+      });
+    }
 
-function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+    log('scrape_completed', { productsCount: products.length });
+    return products;
+  } finally {
+    await browser.close();
+  }
+}
 
 module.exports = { scrape, STORE };
 
 if (require.main === module) {
-  scrape().then(p => { console.log(`\n--- RESULTADO ---\nProductos: ${p.length}`); console.log(JSON.stringify(p.slice(0, 3), null, 2)); });
+  scrape()
+    .then(p => {
+      console.log(`\n--- RESULTADO ---\nProductos: ${p.length}`);
+      console.log(JSON.stringify(p.slice(0, 5), null, 2));
+    })
+    .catch(err => {
+      console.error('Error:', err.message);
+      process.exit(1);
+    });
 }
