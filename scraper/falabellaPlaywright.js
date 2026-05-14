@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Falabella PE — Enterprise hybrid scraper (Playwright)
+ * Falabella PE — Progressive hybrid scraper (Playwright)
  *
  * Extraction strategy (applied in priority order per category):
  *
@@ -15,27 +15,32 @@
  *      both yield nothing (e.g. page structure changed).
  *
  * Modes:
- *   fast (default) — MANDATORY_PATHS only, max 5 pages/cat, ~3-5 min total.
- *                    Designed for the every-15-min cron job.
+ *   fast (default) — BATCH_SIZE categories per run, max 5 pages/cat.
+ *                    Round-robin cursor in falabella_cursor.json so each
+ *                    15-min cron advances through the full CATEGORIAS_BASE.
  *   full           — all discovered categories, max 50 pages/cat, ~30-60 min.
  *                    Designed for the nightly deep-crawl.
  *
  * Polite scraping:
- *   - Queue-based concurrency pool (2 workers), never bursts more than 2
+ *   - Queue-based concurrency pool (3 workers), never bursts more than 3
  *     simultaneous page loads.
  *   - Randomised inter-page and inter-category delays calibrated per mode.
  *   - User-Agent rotated from a pool of 5 real browser signatures.
  *   - All images/fonts/styles/analytics blocked — ~80 % memory saving.
  */
 
-const { chromium } = require('playwright');
+const path           = require('path');
+const fs             = require('fs');
+const { chromium }   = require('playwright');
 const { cleanTitle, urlToSku, cleanScene7Url } = require('./utils');
 
 const STORE            = 'Falabella';
 const BASE             = 'https://www.falabella.com.pe';
-const MAX_PAGES_FAST   = 3;   // fast mode: max 3 pages/cat — balance cobertura/seguridad
+const MAX_PAGES_FAST   = 5;   // fast mode: 5 páginas/cat (~120 productos/categoría)
 const MAX_PAGES_FULL   = 50;  // full mode: deep-crawl nocturno
-const CAT_CONCURRENCY  = 3;   // 3 workers en paralelo
+const BATCH_SIZE       = 5;   // categorías por lote (cron cada 15 min)
+const CURSOR_FILE      = path.join(__dirname, 'falabella_cursor.json');
+const CAT_CONCURRENCY  = 3;   // workers en paralelo
 const MIN_DISCOUNT     = 5;   // % — skip trivial deals
 const PAGE_SIZE        = 24;  // Falabella's default products-per-page
 
@@ -49,24 +54,50 @@ const USER_AGENTS = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
 ];
 
-// ── Category list — hardcoded, no dynamic discovery ───────────────────────────
-// cat40xxx = IDs de grilla real (no redirigen). cat629xxx = landing pages
-// protegidas que redirigen al Home. Las rutas /search?Ntt=... son fallback
-// para items específicos como Cómodas y Cambiadores.
+// ── Category list — hardcoded, round-robin progressive scraping ───────────────
+// cat40xxx  = IDs de grilla real que devuelven productos directamente.
+// cat629xxx = landing pages protegidas que redirigen bots al Home — EXCLUIDAS.
+// /search?Ntt=... = inmunes a redirects, cubren subcategorías sin ID conocido.
+// El cursor en falabella_cursor.json avanza BATCH_SIZE entradas por ejecución.
 const CATEGORIAS_BASE = [
-  // Hubs de descuentos
+  // ── Hubs de descuentos ────────────────────────────────────────────────────
   '/falabella-pe/collection/descuentos',
   '/falabella-pe/collection/descuentos-cmr',
-  // Grillas reales (IDs cat40xxx — confirmados)
+
+  // ── Grillas cat40xxx nivel 1 (IDs verificados en producción) ─────────────
   '/falabella-pe/category/cat40497/Mundo-Bebe',
   '/falabella-pe/category/cat40700/Muebles',
   '/falabella-pe/category/cat40584/Electrohogar',
   '/falabella-pe/category/cat40793/Tecnologia',
   '/falabella-pe/category/cat1470548/Zapatillas',
   '/falabella-pe/category/cat6370521/Linea-blanca',
-  // Búsqueda directa — garantiza la Cómoda Ternura aunque cambie el catID
+
+  // ── Búsquedas directas — Muebles / Dormitorio ────────────────────────────
   '/falabella-pe/search?Ntt=comoda',
   '/falabella-pe/search?Ntt=comodas+y+cambiadores',
+  '/falabella-pe/search?Ntt=sofa+sala',
+  '/falabella-pe/search?Ntt=set+comedor',
+  '/falabella-pe/search?Ntt=colchon',
+
+  // ── Búsquedas directas — Electrohogar ────────────────────────────────────
+  '/falabella-pe/search?Ntt=refrigeradora',
+  '/falabella-pe/search?Ntt=lavadora',
+  '/falabella-pe/search?Ntt=microondas',
+
+  // ── Búsquedas directas — Tecnología ──────────────────────────────────────
+  '/falabella-pe/search?Ntt=laptop',
+  '/falabella-pe/search?Ntt=television+smart+tv',
+  '/falabella-pe/search?Ntt=celular+smartphone',
+  '/falabella-pe/search?Ntt=tablet',
+
+  // ── Búsquedas directas — Moda y Deportes ─────────────────────────────────
+  '/falabella-pe/search?Ntt=zapatillas+deportivas',
+  '/falabella-pe/search?Ntt=ropa+mujer',
+  '/falabella-pe/search?Ntt=ropa+hombre',
+
+  // ── Búsquedas directas — Otros ───────────────────────────────────────────
+  '/falabella-pe/search?Ntt=perfume',
+  '/falabella-pe/search?Ntt=bicicleta',
 ];
 
 // ── Resource blocking ──────────────────────────────────────────────────────────
@@ -81,16 +112,40 @@ const ABORT_DOMAINS = [
 // ── Main entry point ───────────────────────────────────────────────────────────
 /**
  * @param {'fast'|'full'} mode
- *   'fast' (default) — MANDATORY_PATHS, max 5 pages/cat. For cron every 15 min.
- *   'full'           — all discovered categories, max 50 pages/cat. For nightly.
+ *   'fast' (default) — BATCH_SIZE categorías por ejecución, seleccionadas con
+ *                      cursor round-robin (falabella_cursor.json). Máx 5 pág/cat.
+ *                      Diseñado para el cron cada 15 min.
+ *   'full'           — todas las categorías descubiertas, máx 50 pág/cat.
+ *                      Diseñado para el deep-crawl nocturno.
  */
 async function scrape(mode = 'fast') {
   const products       = [];
   const seen           = new Set();
   const maxPagesPerCat = mode === 'full' ? MAX_PAGES_FULL : MAX_PAGES_FAST;
   let   browser;
+  let   cursorNextIdx  = null; // sólo en fast mode; persiste en finally
 
-  console.log(`[${STORE}] Modo: ${mode.toUpperCase()} — máx ${maxPagesPerCat} pág/cat, ${CAT_CONCURRENCY} workers`);
+  // ── Progressive batch selection (fast mode only) ───────────────────────────
+  // Cada ejecución del cron procesa BATCH_SIZE categorías en orden circular.
+  // El cursor almacena el índice donde debe arrancar el PRÓXIMO lote.
+  // Con 26 entradas y BATCH_SIZE=5 → cobertura completa cada 6 ejecuciones (90 min).
+  let fastPaths;
+  if (mode !== 'full') {
+    const cursor   = readCursor();
+    const total    = CATEGORIAS_BASE.length;
+    const startIdx = cursor.lastCategoryIndex % total;
+    fastPaths      = Array.from({ length: BATCH_SIZE }, (_, i) =>
+      CATEGORIAS_BASE[(startIdx + i) % total]
+    );
+    cursorNextIdx  = (startIdx + BATCH_SIZE) % total;
+    const endLabel = ((startIdx + BATCH_SIZE - 1) % total) + 1;
+    console.log(
+      `[${STORE}] Modo: FAST — lote progresivo [${startIdx + 1}–${endLabel}] ` +
+      `de ${total}, máx ${maxPagesPerCat} pág/cat, ${CAT_CONCURRENCY} workers`
+    );
+  } else {
+    console.log(`[${STORE}] Modo: FULL — máx ${maxPagesPerCat} pág/cat, ${CAT_CONCURRENCY} workers`);
+  }
 
   try {
     browser = await chromium.launch({
@@ -127,12 +182,11 @@ async function scrape(mode = 'fast') {
       { name: 'currentStoreSlug',  value: 'falabella-pe', domain: '.falabella.com.pe', path: '/' },
     ]);
 
-    // Ambos modos parten de CATEGORIAS_BASE (IDs cat40xxx verificados).
-    // Full mode fusiona con discovery dinámico para cobertura extra nocturna.
-    // Fast mode (cron) nunca toca el Home — evita el redirect de cat629xxx.
+    // Fast mode usa el lote seleccionado por el cursor.
+    // Full mode fusiona CATEGORIAS_BASE con discovery dinámico para cobertura nocturna.
     const paths = mode === 'full'
       ? dedupe([...CATEGORIAS_BASE, ...await discoverCategories(context)])
-      : CATEGORIAS_BASE;
+      : fastPaths;
     console.log(`[${STORE}] ${paths.length} categorías a procesar`);
 
     // Queue-based worker pool — CAT_CONCURRENCY workers pull from a shared queue.
@@ -142,7 +196,6 @@ async function scrape(mode = 'fast') {
       const catUrl = BASE + catPath;
       try {
         const batch = await scrapeCategory(context, catUrl, seen, maxPagesPerCat, mode);
-        // push is synchronous — safe under JS single-threaded concurrency
         products.push(...batch);
         console.log(`[${STORE}] ${catPath} → ${batch.length} prods (acum. ${products.length})`);
       } catch (err) {
@@ -162,6 +215,9 @@ async function scrape(mode = 'fast') {
     if (browser) {
       try { await browser.close(); } catch (_) {}
     }
+    // Persiste el cursor al finalizar (incluso en error parcial) para que el
+    // próximo cron avance al siguiente lote y no repita el mismo batch infinito.
+    if (cursorNextIdx !== null) writeCursor(cursorNextIdx);
   }
 
   console.log(`[${STORE}] Scrape completo — ${products.length} productos`);
@@ -661,6 +717,31 @@ function parseAndAdd(rawItems, out, seen, catUrl) {
 }
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
+
+// ── Cursor helpers ─────────────────────────────────────────────────────────────
+/** Lee el cursor del archivo JSON; devuelve índice 0 si el archivo no existe. */
+function readCursor() {
+  try {
+    return JSON.parse(fs.readFileSync(CURSOR_FILE, 'utf8'));
+  } catch (_) {
+    return { lastCategoryIndex: 0 };
+  }
+}
+
+/** Guarda el índice del próximo lote en el cursor JSON (crea el archivo si no existe). */
+function writeCursor(nextIndex) {
+  try {
+    fs.writeFileSync(
+      CURSOR_FILE,
+      JSON.stringify(
+        { lastCategoryIndex: nextIndex, updatedAt: new Date().toISOString() },
+        null, 2
+      )
+    );
+  } catch (err) {
+    console.error(`[${STORE}] No se pudo guardar cursor: ${err.message}`);
+  }
+}
 
 /** Open a new page with resource blocking already configured. */
 async function openPage(context) {
