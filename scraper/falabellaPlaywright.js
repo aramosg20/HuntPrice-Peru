@@ -29,17 +29,14 @@
  *   - All images/fonts/styles/analytics blocked — ~80 % memory saving.
  */
 
-const path           = require('path');
-const fs             = require('fs');
 const { chromium }   = require('playwright');
 const { cleanTitle, urlToSku, cleanScene7Url } = require('./utils');
+const { readCursor, writeCursor, runWithConcurrency, jitter, BATCH_SIZE } = require('./engine');
 
 const STORE            = 'Falabella';
 const BASE             = 'https://www.falabella.com.pe';
 const MAX_PAGES_FAST   = 5;   // fast mode: 5 páginas/cat (~120 productos/categoría)
 const MAX_PAGES_FULL   = 50;  // full mode: deep-crawl nocturno
-const BATCH_SIZE       = 5;   // categorías por lote (cron cada 15 min)
-const CURSOR_FILE      = path.join(__dirname, 'falabella_cursor.json');
 const CAT_CONCURRENCY  = 3;   // workers en paralelo
 const MIN_DISCOUNT     = 5;   // % — skip trivial deals
 const PAGE_SIZE        = 24;  // Falabella's default products-per-page
@@ -131,7 +128,7 @@ async function scrape(mode = 'fast') {
   // Con 26 entradas y BATCH_SIZE=5 → cobertura completa cada 6 ejecuciones (90 min).
   let fastPaths;
   if (mode !== 'full') {
-    const cursor   = readCursor();
+    const cursor   = readCursor(STORE);
     const total    = CATEGORIAS_BASE.length;
     const startIdx = cursor.lastCategoryIndex % total;
     fastPaths      = Array.from({ length: BATCH_SIZE }, (_, i) =>
@@ -217,7 +214,7 @@ async function scrape(mode = 'fast') {
     }
     // Persiste el cursor al finalizar (incluso en error parcial) para que el
     // próximo cron avance al siguiente lote y no repita el mismo batch infinito.
-    if (cursorNextIdx !== null) writeCursor(cursorNextIdx);
+    if (cursorNextIdx !== null) writeCursor(STORE, cursorNextIdx);
   }
 
   console.log(`[${STORE}] Scrape completo — ${products.length} productos`);
@@ -718,31 +715,6 @@ function parseAndAdd(rawItems, out, seen, catUrl) {
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
 
-// ── Cursor helpers ─────────────────────────────────────────────────────────────
-/** Lee el cursor del archivo JSON; devuelve índice 0 si el archivo no existe. */
-function readCursor() {
-  try {
-    return JSON.parse(fs.readFileSync(CURSOR_FILE, 'utf8'));
-  } catch (_) {
-    return { lastCategoryIndex: 0 };
-  }
-}
-
-/** Guarda el índice del próximo lote en el cursor JSON (crea el archivo si no existe). */
-function writeCursor(nextIndex) {
-  try {
-    fs.writeFileSync(
-      CURSOR_FILE,
-      JSON.stringify(
-        { lastCategoryIndex: nextIndex, updatedAt: new Date().toISOString() },
-        null, 2
-      )
-    );
-  } catch (err) {
-    console.error(`[${STORE}] No se pudo guardar cursor: ${err.message}`);
-  }
-}
-
 /** Open a new page with resource blocking already configured. */
 async function openPage(context) {
   const page = await context.newPage();
@@ -755,25 +727,6 @@ async function openPage(context) {
     route.continue();
   });
   return page;
-}
-
-/**
- * Queue-based concurrency pool.
- * Creates `limit` long-running workers that each pull tasks from a shared
- * queue until exhausted — unlike batch Promise.allSettled, idle workers
- * immediately pick up the next task without waiting for slower siblings.
- */
-async function runWithConcurrency(items, limit, fn) {
-  const queue = items.slice(); // shallow copy so we can shift() safely
-  async function worker() {
-    while (queue.length) {
-      const item = queue.shift();
-      if (item !== undefined) await fn(item);
-    }
-  }
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, worker)
-  );
 }
 
 /**
@@ -806,11 +759,6 @@ function isProductLike(item) {
 /** Pick a random User-Agent from the pool. */
 function pickUa() {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-}
-
-/** Random delay: base + up to extra milliseconds. */
-function jitter(base, extra) {
-  return new Promise(r => setTimeout(r, base + Math.random() * extra));
 }
 
 function dedupe(paths) {
