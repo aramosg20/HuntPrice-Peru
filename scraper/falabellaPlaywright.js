@@ -11,31 +11,46 @@
  *      script tag is available immediately after DOMContentLoaded, no render
  *      needed. This is the primary path for page 1.
  *
- *   C  DOM fallback           — $$eval on product-card selectors when A+B
+ *   C  DOM fallback          — $$eval on product-card selectors when A+B
  *      both yield nothing (e.g. page structure changed).
  *
- * Pagination uses the Next.js /_next/data/{buildId}/*.json API so pages 2-N
- * are a single lightweight JSON fetch from inside the browser context
- * (inherits session cookies), not a full navigation.
+ * Modes:
+ *   fast (default) — MANDATORY_PATHS only, max 5 pages/cat, ~3-5 min total.
+ *                    Designed for the every-15-min cron job.
+ *   full           — all discovered categories, max 50 pages/cat, ~30-60 min.
+ *                    Designed for the nightly deep-crawl.
  *
- * Category discovery: navigates to the homepage and extracts macro-category
- * hrefs from the nav DOM and/or __NEXT_DATA__ nav tree. Falls back to a
- * hardcoded seed list if the site structure changes.
+ * Polite scraping:
+ *   - Queue-based concurrency pool (2 workers), never bursts more than 2
+ *     simultaneous page loads.
+ *   - Randomised inter-page and inter-category delays calibrated per mode.
+ *   - User-Agent rotated from a pool of 5 real browser signatures.
+ *   - All images/fonts/styles/analytics blocked — ~80 % memory saving.
  */
 
 const { chromium } = require('playwright');
 const { cleanTitle, urlToSku, cleanScene7Url } = require('./utils');
 
-const STORE           = 'Falabella';
-const BASE            = 'https://www.falabella.com.pe';
-const MAX_PAGES       = 50;  // safety cap: pages per category
-const MIN_DISCOUNT    = 5;   // % — skip trivial deals
-const PAGE_SIZE       = 24;  // Falabella's default products-per-page
-const CAT_CONCURRENCY = 3;   // categories scraped in parallel
+const STORE            = 'Falabella';
+const BASE             = 'https://www.falabella.com.pe';
+const MAX_PAGES_FAST   = 5;   // fast mode: cap per category (cron every 15 min)
+const MAX_PAGES_FULL   = 50;  // full mode: cap per category (nightly deep-crawl)
+const CAT_CONCURRENCY  = 2;   // max parallel categories — polite scraping
+const MIN_DISCOUNT     = 5;   // % — skip trivial deals
+const PAGE_SIZE        = 24;  // Falabella's default products-per-page
 
-// ── Mandatory categories ──────────────────────────────────────────────────────
-// Always merged with dynamically-discovered paths so these areas can never
-// be dropped by a discovery failure or URL-pattern change.
+// ── User-Agent pool ────────────────────────────────────────────────────────────
+// Rotated per scrape run so repeated calls don't share an identical fingerprint.
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+];
+
+// ── Mandatory categories ───────────────────────────────────────────────────────
+// Scanned in BOTH modes. Fast mode uses ONLY this list (skips discovery).
 const MANDATORY_PATHS = [
   // Deal hubs
   '/falabella-pe/collection/descuentos',
@@ -49,7 +64,7 @@ const MANDATORY_PATHS = [
   '/falabella-pe/category/cat6290009/Mundo-Bebe',
   '/falabella-pe/category/cat6290002/Belleza',
   '/falabella-pe/category/cat6290006/Computacion',
-  // High-value sub-areas that get missed when discovery caps early
+  // High-value sub-areas
   '/falabella-pe/category/cat6290003/Ninos',
   '/falabella-pe/category/cat6290010/Hogar',
   '/falabella-pe/collection/dormitorio',
@@ -60,8 +75,7 @@ const MANDATORY_PATHS = [
   '/falabella-pe/collection/comodas-y-cambiadores',
 ];
 
-// ── Resource blocking ─────────────────────────────────────────────────────────
-// Abort heavy/irrelevant resource types to cut memory usage by ~80 %.
+// ── Resource blocking ──────────────────────────────────────────────────────────
 const ABORT_TYPES   = new Set(['image', 'stylesheet', 'font', 'media']);
 const ABORT_DOMAINS = [
   'google-analytics.com', 'googletagmanager.com', 'facebook.com',
@@ -70,11 +84,19 @@ const ABORT_DOMAINS = [
   'sharethis.com', 'addthis.com',
 ];
 
-// ── Main entry point ──────────────────────────────────────────────────────────
-async function scrape() {
-  const products = [];
-  const seen     = new Set();
+// ── Main entry point ───────────────────────────────────────────────────────────
+/**
+ * @param {'fast'|'full'} mode
+ *   'fast' (default) — MANDATORY_PATHS, max 5 pages/cat. For cron every 15 min.
+ *   'full'           — all discovered categories, max 50 pages/cat. For nightly.
+ */
+async function scrape(mode = 'fast') {
+  const products       = [];
+  const seen           = new Set();
+  const maxPagesPerCat = mode === 'full' ? MAX_PAGES_FULL : MAX_PAGES_FAST;
   let   browser;
+
+  console.log(`[${STORE}] Modo: ${mode.toUpperCase()} — máx ${maxPagesPerCat} pág/cat, ${CAT_CONCURRENCY} workers`);
 
   try {
     browser = await chromium.launch({
@@ -91,46 +113,40 @@ async function scrape() {
     });
 
     const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      userAgent: pickUa(),
       locale:    'es-PE',
       viewport:  { width: 1280, height: 800 },
     });
 
-    // Step 1 — discover category paths (dynamic) ───────────────────────────
-    const paths = await discoverCategories(context);
+    // Fast mode skips discovery and uses the known-good mandatory list directly,
+    // saving one extra homepage navigation per cron run.
+    const paths = mode === 'full'
+      ? await discoverCategories(context)
+      : MANDATORY_PATHS;
     console.log(`[${STORE}] ${paths.length} categorías a procesar`);
 
-    // Step 2 — scrape categories in batches of CAT_CONCURRENCY ─────────────
-    for (let i = 0; i < paths.length; i += CAT_CONCURRENCY) {
-      const chunk   = paths.slice(i, i + CAT_CONCURRENCY);
-      const settled = await Promise.allSettled(
-        chunk.map(catPath =>
-          scrapeCategory(context, BASE + catPath, seen)
-            .then(batch => ({ catPath, batch }))
-        )
-      );
-      for (const res of settled) {
-        if (res.status === 'fulfilled') {
-          const { catPath, batch } = res.value;
-          products.push(...batch);
-          console.log(`[${STORE}] ${catPath} → ${batch.length} prods (acum. ${products.length})`);
-        } else {
-          console.error(`[${STORE}] Error en categoría: ${res.reason?.message}`);
-        }
+    // Queue-based worker pool — CAT_CONCURRENCY workers pull from a shared queue.
+    // Unlike batch Promise.allSettled, idle workers immediately pick up the next
+    // task without waiting for the slowest sibling in the batch.
+    await runWithConcurrency(paths, CAT_CONCURRENCY, async catPath => {
+      const catUrl = BASE + catPath;
+      try {
+        const batch = await scrapeCategory(context, catUrl, seen, maxPagesPerCat, mode);
+        // push is synchronous — safe under JS single-threaded concurrency
+        products.push(...batch);
+        console.log(`[${STORE}] ${catPath} → ${batch.length} prods (acum. ${products.length})`);
+      } catch (err) {
+        console.error(`[${STORE}] Error en ${catPath}: ${err.message}`);
       }
-      if (i + CAT_CONCURRENCY < paths.length) {
-        await delay(2000 + Math.random() * 1500);
-      }
-    }
+      // Polite inter-category pause before this worker picks up the next path
+      await (mode === 'full' ? jitter(4000, 4000) : jitter(2500, 2500));
+    });
 
   } catch (err) {
     console.error(`[${STORE}] Fatal — ${err.message}`);
-    // Graceful fallback: if Chromium isn't installed, use the legacy axios scraper
     if (err.message.includes('Executable doesn') || err.message.includes('browser')) {
-      console.warn(`[${STORE}] Fallback al scraper legacy (ejecuta: npx playwright install chromium)`);
-      try {
-        return require('./falabella').scrape();
-      } catch (_) {}
+      console.warn(`[${STORE}] Fallback al scraper legacy (npx playwright install chromium)`);
+      try { return require('./falabella').scrape(); } catch (_) {}
     }
   } finally {
     if (browser) {
@@ -142,7 +158,7 @@ async function scrape() {
   return products;
 }
 
-// ── Category auto-discovery ───────────────────────────────────────────────────
+// ── Category auto-discovery ────────────────────────────────────────────────────
 async function discoverCategories(context) {
   const page = await openPage(context);
   try {
@@ -151,17 +167,17 @@ async function discoverCategories(context) {
       timeout:   30000,
     });
 
-    // Attempt A: __NEXT_DATA__ nav tree ─────────────────────────────────────
+    // Attempt A: __NEXT_DATA__ nav tree ────────────────────────────────────
     const nd       = await extractNextData(page);
     const navPaths = navPathsFromNextData(nd);
     if (navPaths.length >= 4) {
       console.log(`[${STORE}] Discovery via __NEXT_DATA__: ${navPaths.length} paths`);
       const merged = dedupe([...MANDATORY_PATHS, ...navPaths]);
-      console.log(`[${STORE}] Total tras fusión con obligatorias: ${merged.length} paths`);
+      console.log(`[${STORE}] Total tras fusión: ${merged.length} paths`);
       return merged;
     }
 
-    // Attempt B: crawl <a href> links in nav DOM ────────────────────────────
+    // Attempt B: crawl <a href> links in the full page DOM ─────────────────
     const domPaths = await page.$$eval('a[href]', anchors =>
       anchors
         .map(a => a.getAttribute('href') || '')
@@ -176,7 +192,7 @@ async function discoverCategories(context) {
     if (domPaths.length >= 2) {
       console.log(`[${STORE}] Discovery via DOM: ${domPaths.length} paths`);
       const merged = dedupe([...MANDATORY_PATHS, ...domPaths]);
-      console.log(`[${STORE}] Total tras fusión con obligatorias: ${merged.length} paths`);
+      console.log(`[${STORE}] Total tras fusión: ${merged.length} paths`);
       return merged;
     }
 
@@ -193,8 +209,8 @@ async function discoverCategories(context) {
 /** Walk known key paths in __NEXT_DATA__ looking for nav/category arrays (3 levels deep). */
 function navPathsFromNextData(nd) {
   if (!nd) return [];
-  const paths  = [];
-  const pp     = nd?.props?.pageProps || {};
+  const paths    = [];
+  const pp       = nd?.props?.pageProps || {};
   const navRoots = [
     pp?.header?.menuCategories,
     pp?.header?.categories,
@@ -212,8 +228,7 @@ function navPathsFromNextData(nd) {
         const cp = toPathname(child?.url || child?.path || '');
         if (isValidCategoryPath(cp)) paths.push(cp);
         // Level 3: e.g. Mundo Bebé → Dormitorio Bebé → Cómodas y Cambiadores
-        const grandchildren = child?.children || child?.subcategories || [];
-        for (const grand of grandchildren) {
+        for (const grand of child?.children || child?.subcategories || []) {
           const gp = toPathname(grand?.url || grand?.path || '');
           if (isValidCategoryPath(gp)) paths.push(gp);
         }
@@ -223,8 +238,8 @@ function navPathsFromNextData(nd) {
   return paths;
 }
 
-// ── Per-category scraper ──────────────────────────────────────────────────────
-async function scrapeCategory(context, categoryUrl, seen) {
+// ── Per-category scraper ───────────────────────────────────────────────────────
+async function scrapeCategory(context, categoryUrl, seen, maxPagesPerCat, mode) {
   const products    = [];
   const intercepted = [];
   const page        = await openPage(context);
@@ -250,7 +265,7 @@ async function scrapeCategory(context, categoryUrl, seen) {
   page.on('response', onResponse);
 
   try {
-    // ── Page 1: full navigation ────────────────────────────────────────────
+    // ── Page 1: full navigation ─────────────────────────────────────────────
     await page.goto(categoryUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
     const nd      = await extractNextData(page);
@@ -274,28 +289,26 @@ async function scrapeCategory(context, categoryUrl, seen) {
     parseAndAdd(rawItems, products, seen, categoryUrl);
     const p1Count = rawItems.length;
 
-    // Nothing on page 1 → skip pagination
-    if (p1Count === 0) return products;
+    if (p1Count === 0) return products; // nothing on page 1 → skip pagination
 
-    // ── Multi-strategy pagination ──────────────────────────────────────────
+    // ── Multi-strategy pagination ───────────────────────────────────────────
     // Upper bound: use totalCount when known; otherwise probe until empty.
-    // NEVER gate on total > p1Count — totalCount can be 0 if pageProps shape
-    // is unknown, which was silently skipping pagination on every category.
+    // maxPagesPerCat is the per-mode safety cap (5 fast / 50 full).
     const total    = totalCountFromNd(nd);
     const maxPages = total > 0
-      ? Math.min(Math.ceil(total / PAGE_SIZE), MAX_PAGES)
-      : MAX_PAGES;
+      ? Math.min(Math.ceil(total / PAGE_SIZE), maxPagesPerCat)
+      : maxPagesPerCat;
 
     if (buildId) {
       // Strategy A: _next/data lightweight fetches (no page navigation)
-      const gotMore = await paginateViaNextData(page, categoryUrl, buildId, maxPages, products, seen);
+      const gotMore = await paginateViaNextData(page, categoryUrl, buildId, maxPages, mode, products, seen);
       if (!gotMore) {
         // _next/data returned nothing → fall back to ?page=N URL navigation
-        await paginateViaUrl(page, categoryUrl, maxPages, products, seen);
+        await paginateViaUrl(page, categoryUrl, maxPages, mode, products, seen);
       }
     } else {
       // No buildId → go straight to URL-based pagination
-      await paginateViaUrl(page, categoryUrl, maxPages, products, seen);
+      await paginateViaUrl(page, categoryUrl, maxPages, mode, products, seen);
     }
 
   } finally {
@@ -308,31 +321,27 @@ async function scrapeCategory(context, categoryUrl, seen) {
 
 /**
  * Fast pagination via Next.js /_next/data/{buildId}/path.json?page=N
- * Fetched from inside the browser context (inherits cookies + TLS fingerprint).
+ * Fetched sequentially (not in parallel) with a polite delay between pages.
  * Returns true if at least one additional page was retrieved.
  */
-async function paginateViaNextData(page, categoryUrl, buildId, maxPages, products, seen) {
+async function paginateViaNextData(page, categoryUrl, buildId, maxPages, mode, products, seen) {
   const urlObj = new URL(categoryUrl);
   const ndPath = urlObj.pathname.replace(/\/$/, '') + '.json';
   const ndBase = `${urlObj.origin}/_next/data/${buildId}${ndPath}`;
   let   gotAny = false;
 
-  for (let p = 2; p <= maxPages; p += 3) {
-    const batch    = [p, p + 1, p + 2].filter(n => n <= maxPages);
-    const fetched  = await Promise.all(batch.map(n => fetchNdPage(page, ndBase, n)));
-    let   batchHit = false;
+  for (let p = 2; p <= maxPages; p++) {
+    const pData  = await fetchNdPage(page, ndBase, p);
+    const pItems = resultsFromNd(pData);
 
-    for (const pData of fetched) {
-      const pItems = resultsFromNd(pData);
-      if (pItems.length === 0) continue;
-      batchHit = true;
-      gotAny   = true;
-      parseAndAdd(pItems, products, seen, categoryUrl);
-    }
+    if (pItems.length === 0) break; // natural end of catalog
 
-    if (!batchHit) break; // consecutive empty batch → natural end of catalog
-    console.log(`  [${STORE}] nd p${batch[0]}–${batch[batch.length - 1]} → ${products.length} acum.`);
-    await delay(600 + Math.random() * 400);
+    gotAny = true;
+    parseAndAdd(pItems, products, seen, categoryUrl);
+    console.log(`  [${STORE}] nd ?page=${p} → ${products.length} acum.`);
+
+    // Polite delay — full mode is slower; fast mode stays nimble
+    await (mode === 'full' ? jitter(2000, 2000) : jitter(1000, 1500));
   }
 
   return gotAny;
@@ -342,7 +351,7 @@ async function paginateViaNextData(page, categoryUrl, buildId, maxPages, product
  * URL-based pagination: navigates to categoryUrl?page=N, extracts __NEXT_DATA__
  * (or DOM fallback). Used when buildId is unavailable or _next/data returns nothing.
  */
-async function paginateViaUrl(page, categoryUrl, maxPages, products, seen) {
+async function paginateViaUrl(page, categoryUrl, maxPages, mode, products, seen) {
   const baseUrl = categoryUrl.split('?')[0];
 
   for (let p = 2; p <= maxPages; p++) {
@@ -353,9 +362,11 @@ async function paginateViaUrl(page, categoryUrl, maxPages, products, seen) {
       let pItems = resultsFromNd(nd);
       if (pItems.length === 0) pItems = await extractFromDom(page, pageUrl);
       if (pItems.length === 0) break; // natural end of catalog
+
       parseAndAdd(pItems, products, seen, categoryUrl);
-      console.log(`  [${STORE}] ?page=${p} → ${products.length} acum.`);
-      await delay(1500 + Math.random() * 1000);
+      console.log(`  [${STORE}] url ?page=${p} → ${products.length} acum.`);
+
+      await (mode === 'full' ? jitter(2500, 2000) : jitter(1200, 1500));
     } catch (err) {
       console.error(`  [${STORE}] Error pag. URL p${p}: ${err.message}`);
       break;
@@ -363,7 +374,7 @@ async function paginateViaUrl(page, categoryUrl, maxPages, products, seen) {
   }
 }
 
-// ── Data extraction helpers ───────────────────────────────────────────────────
+// ── Data extraction helpers ────────────────────────────────────────────────────
 
 /** Read and parse the __NEXT_DATA__ JSON embedded in the page HTML. */
 async function extractNextData(page) {
@@ -414,9 +425,9 @@ function resultsFromApiResponse(data) {
 }
 
 /**
- * Fetch a paginated Next.js data endpoint from inside the browser context.
- * Using page.evaluate's fetch() inherits session cookies and the correct
- * Chromium TLS fingerprint — no extra HTTP client needed.
+ * Fetch one paginated Next.js data endpoint from inside the browser context.
+ * Using page.evaluate's fetch() inherits session cookies and Chromium's TLS
+ * fingerprint — no extra HTTP client needed.
  */
 async function fetchNdPage(page, ndBase, pageNum) {
   const url = `${ndBase}?page=${pageNum}`;
@@ -445,16 +456,16 @@ async function extractFromDom(page, sourceUrl) {
     return await page.$$eval(
       '[class*="pod"][class*="sku"], .pod--sku, [data-pod="pod"]',
       (cards, src) => cards.map(card => {
-        const nameEl    = card.querySelector('[class*="pod-title"], [class*="pod-header"]');
-        const priceEl   = card.querySelector('[class*="buy-price"], [class*="price--best"], [class*="subprice__bulk"]');
-        const origEl    = card.querySelector('[class*="crossed"], [class*="normal-price"]');
-        const imgEl     = card.querySelector('img[src], img[data-src]');
-        const linkEl    = card.querySelector('a[href*="/product/"]');
+        const nameEl  = card.querySelector('[class*="pod-title"], [class*="pod-header"]');
+        const priceEl = card.querySelector('[class*="buy-price"], [class*="price--best"], [class*="subprice__bulk"]');
+        const origEl  = card.querySelector('[class*="crossed"], [class*="normal-price"]');
+        const imgEl   = card.querySelector('img[src], img[data-src]');
+        const linkEl  = card.querySelector('a[href*="/product/"]');
         return {
           displayName: nameEl?.textContent?.trim() || '',
           prices: [
-            origEl?.textContent  ? { label: 'normal',  price: [origEl.textContent.trim()],   crossed: true  } : null,
-            priceEl?.textContent ? { label: 'oferta',  price: [priceEl.textContent.trim()],  crossed: false } : null,
+            origEl?.textContent  ? { label: 'normal', price: [origEl.textContent.trim()],  crossed: true  } : null,
+            priceEl?.textContent ? { label: 'oferta', price: [priceEl.textContent.trim()], crossed: false } : null,
           ].filter(Boolean),
           mediaUrls: [imgEl?.src || imgEl?.dataset?.src || ''].filter(Boolean),
           url: linkEl ? new URL(linkEl.href, 'https://www.falabella.com.pe').href : src,
@@ -465,7 +476,7 @@ async function extractFromDom(page, sourceUrl) {
   } catch (_) { return []; }
 }
 
-// ── Price extraction ──────────────────────────────────────────────────────────
+// ── Price extraction ───────────────────────────────────────────────────────────
 
 /**
  * Extract (original, current) prices from Falabella's prices array.
@@ -495,7 +506,7 @@ function parsePrice(str) {
   return parseFloat(String(str).replace(/[^\d.]/g, '')) || 0;
 }
 
-// ── Product normalizer ────────────────────────────────────────────────────────
+// ── Product normalizer ─────────────────────────────────────────────────────────
 
 function parseAndAdd(rawItems, out, seen, catUrl) {
   for (const item of rawItems) {
@@ -506,10 +517,10 @@ function parseAndAdd(rawItems, out, seen, catUrl) {
       const { current, original } = extractPrices(item.prices || []);
       if (!current || current <= 0) continue;
 
-      const effectiveOrig  = original > current
+      const effectiveOrig = original > current
         ? original
         : Math.round(current * 1.3); // synthesise if only sale price present
-      const discountPct    = Math.round(((effectiveOrig - current) / effectiveOrig) * 100);
+      const discountPct   = Math.round(((effectiveOrig - current) / effectiveOrig) * 100);
       if (discountPct < MIN_DISCOUNT) continue;
 
       const productUrl = item.url || catUrl;
@@ -536,7 +547,7 @@ function parseAndAdd(rawItems, out, seen, catUrl) {
   }
 }
 
-// ── Utilities ─────────────────────────────────────────────────────────────────
+// ── Utilities ──────────────────────────────────────────────────────────────────
 
 /** Open a new page with resource blocking already configured. */
 async function openPage(context) {
@@ -545,11 +556,40 @@ async function openPage(context) {
     const req  = route.request();
     const type = req.resourceType();
     const url  = req.url();
-    if (ABORT_TYPES.has(type))                            return route.abort();
-    if (ABORT_DOMAINS.some(d => url.includes(d)))        return route.abort();
+    if (ABORT_TYPES.has(type))                     return route.abort();
+    if (ABORT_DOMAINS.some(d => url.includes(d))) return route.abort();
     route.continue();
   });
   return page;
+}
+
+/**
+ * Queue-based concurrency pool.
+ * Creates `limit` long-running workers that each pull tasks from a shared
+ * queue until exhausted — unlike batch Promise.allSettled, idle workers
+ * immediately pick up the next task without waiting for slower siblings.
+ */
+async function runWithConcurrency(items, limit, fn) {
+  const queue = items.slice(); // shallow copy so we can shift() safely
+  async function worker() {
+    while (queue.length) {
+      const item = queue.shift();
+      if (item !== undefined) await fn(item);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, worker)
+  );
+}
+
+/** Pick a random User-Agent from the pool. */
+function pickUa() {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+/** Random delay: base + up to extra milliseconds. */
+function jitter(base, extra) {
+  return new Promise(r => setTimeout(r, base + Math.random() * extra));
 }
 
 function dedupe(paths) {
@@ -558,7 +598,8 @@ function dedupe(paths) {
 
 function toPathname(href) {
   if (!href) return '';
-  try { return new URL(href, BASE).pathname; } catch (_) { return href.startsWith('/') ? href : ''; }
+  try { return new URL(href, BASE).pathname; }
+  catch (_) { return href.startsWith('/') ? href : ''; }
 }
 
 function isValidCategoryPath(p) {
@@ -579,7 +620,5 @@ function guessCategory(name, url = '') {
   if (/bicicleta|pesa|deporte|tenis|camping/.test(n))               return 'Deportes';
   return 'Hogar';
 }
-
-function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 module.exports = { scrape, STORE };
