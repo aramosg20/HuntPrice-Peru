@@ -30,12 +30,6 @@ function guessCategory(name) {
   return 'Tecnología';
 }
 
-// Parse "S/ 6,899.00" or "s/ 383.28" → 6899 / 383.28
-function parseSoles(text) {
-  const matches = [...text.matchAll(/[Ss]\/\s*([\d,]+(?:\.\d{1,2})?)/g)];
-  return matches.map(m => parseFloat(m[1].replace(/,/g, '')) || 0).filter(v => v > 0);
-}
-
 async function scrapeCategory(ctx, categoryUrl) {
   const page = await ctx.newPage();
   try {
@@ -97,34 +91,34 @@ async function scrapeCategory(ctx, categoryUrl) {
           // Fix protocol-relative URLs
           if (imagen.startsWith('//')) imagen = 'https:' + imagen;
 
-          // Prices — Samsung shows: "Desde s/ 383.28 en 18 cuotas* o S/ 6,899.00"
-          // The LAST S/ value is the full sale price (the installment is the first)
-          const priceEl = card.querySelector('.pd21-product-card__price');
-          const priceText = priceEl?.textContent || '';
-          const prices  = parseSoles(priceText);
-
-          // Also check for explicit original-price element (shown when discounted)
-          const origEl  = card.querySelector('.price-ux__price-before, .price-original, [class*="before-price"], [class*="original-price"], s, del');
-          const origText = origEl?.textContent || '';
-          const origPrices = parseSoles(origText);
-
-          // Full sale price is the last (largest by position, not necessarily value) S/ match
-          const precio_actual = prices[prices.length - 1] || 0;
+          // ── precio_actual ────────────────────────────────────────────────
+          // Read from data-pricetext attribute, NOT textContent: the textContent of
+          // .pd21-product-card__price includes .price-ux__price-save ("Ahorra s/100")
+          // at the end, which caused the save amount to be captured as the sale price.
+          // data-pricetext: "Desde s/ 427.72 en 18 cuotas sin intereses* o S/ 7,699.00"
+          // We want the full price that comes after " o S/ " (not the installment).
+          const currentEl  = card.querySelector('.price-ux__price-current');
+          const priceAttr  = currentEl?.getAttribute('data-pricetext') || '';
+          const afterO     = priceAttr.match(/\bo\s+[Ss]\/\s*([\d,]+(?:\.\d{1,2})?)/);
+          const soloS      = priceAttr.match(/^[Ss]\/\s*([\d,]+(?:\.\d{1,2})?)/);
+          const precio_actual = afterO
+            ? parseFloat(afterO[1].replace(/,/g, ''))
+            : (soloS ? parseFloat(soloS[1].replace(/,/g, '')) : 0);
           if (!precio_actual || precio_actual < 50) continue;
 
-          // Original price: use explicit element if present; otherwise equal to sale price
-          const precio_normal = origPrices[0] || precio_actual;
+          // ── precio_normal ────────────────────────────────────────────────
+          // .price-ux__price-original is the crossed-out list price.
+          // .price-ux__price-save ("Ahorra s/…") is explicitly ignored.
+          const origEl    = card.querySelector('.price-ux__price-original');
+          const origMatch = (origEl?.textContent || '').match(/[Ss]\/\s*([\d,]+(?:\.\d{1,2})?)/);
+          const precio_normal = origMatch
+            ? parseFloat(origMatch[1].replace(/,/g, ''))
+            : precio_actual;
 
           results.push({ titulo, precio_actual, precio_normal, url, imagen });
         } catch (_) {}
       }
       return results;
-
-      // Inline helper — must live inside page.evaluate
-      function parseSoles(text) {
-        const matches = [...text.matchAll(/[Ss]\/\s*([\d,]+(?:\.\d{1,2})?)/g)];
-        return matches.map(m => parseFloat(m[1].replace(/,/g, '')) || 0).filter(v => v > 0);
-      }
     }, { base: BASE, max: MAX_PER_CATEGORY });
 
     log('scrape_dom_extracted', { url: categoryUrl, count: products.length });
