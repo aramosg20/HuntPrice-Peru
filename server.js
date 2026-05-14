@@ -62,10 +62,53 @@ function maskPhone(phone) {
   const d = phone.replace(/\D/g, '');
   return d.length >= 6 ? d.slice(0, 3) + '****' + d.slice(-2) : '****';
 }
+const bcrypt = require('bcryptjs');
+const jwt    = require('jsonwebtoken');
 const scraper = require('./scraper/index');
-const { notifyUsers, testEmail, resetTransporter, sendAlertConfirmation, sendOfferEmail } = require('./notifications/email');
-const { handleIncomingMessage, testWhatsApp, resetClient, notifyWhatsApp } = require('./notifications/whatsapp');
+const { notifyUsers, testEmail, resetTransporter, sendAlertConfirmation, sendOfferEmail,
+        sendWelcomeEmail, sendGoodbyeEmail } = require('./notifications/email');
+const { handleIncomingMessage, testWhatsApp, resetClient, notifyWhatsApp,
+        sendWelcomeWhatsApp, sendGoodbyeWhatsApp } = require('./notifications/whatsapp');
 const https = require('https');
+
+function getJwtSecret() {
+  let s = process.env.JWT_SECRET || db.getConfig('jwt_secret');
+  if (!s) {
+    s = require('crypto').randomBytes(64).toString('hex');
+    db.setConfig('jwt_secret', s);
+  }
+  return s;
+}
+
+function requireAuth(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ ok: false, error: 'No autenticado' });
+  try {
+    req.authUser = jwt.verify(token, getJwtSecret());
+    next();
+  } catch (_) {
+    res.status(401).json({ ok: false, error: 'Sesión expirada. Vuelve a ingresar.' });
+  }
+}
+
+async function sendAuthWelcome(user) {
+  if (user.email) {
+    try { await sendWelcomeEmail(user); } catch (e) { console.warn('[Auth] Welcome email:', e.message); }
+  }
+  if (user.phone) {
+    try { await sendWelcomeWhatsApp(user); } catch (e) { console.warn('[Auth] Welcome WA:', e.message); }
+  }
+}
+
+async function sendAuthGoodbye(user) {
+  if (user.email) {
+    try { await sendGoodbyeEmail(user); } catch (e) { console.warn('[Auth] Goodbye email:', e.message); }
+  }
+  if (user.phone) {
+    try { await sendGoodbyeWhatsApp(user); } catch (e) { console.warn('[Auth] Goodbye WA:', e.message); }
+  }
+}
 
 const app = express();
 const PORT = parseInt(process.env.PORT) || 3000;
@@ -701,6 +744,99 @@ app.post('/webhook/whatsapp', async (req, res) => {
     res.status(200).send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
   } catch (e) {
     res.status(200).send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+  }
+});
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, email, confirm_email, password, confirm_password, phone } = req.body;
+
+    if (!username?.trim())          return res.status(400).json({ ok: false, error: 'Nombre de usuario requerido' });
+    if (!email?.trim())             return res.status(400).json({ ok: false, error: 'Correo requerido' });
+    if (email !== confirm_email)    return res.status(400).json({ ok: false, error: 'Los correos no coinciden' });
+    if (!password || password.length < 8)
+                                    return res.status(400).json({ ok: false, error: 'La contraseña debe tener al menos 8 caracteres' });
+    if (password !== confirm_password)
+                                    return res.status(400).json({ ok: false, error: 'Las contraseñas no coinciden' });
+    if (!phone || !/^\d{9}$/.test(phone))
+                                    return res.status(400).json({ ok: false, error: 'El celular debe tener exactamente 9 dígitos' });
+
+    const emailNorm = email.toLowerCase().trim();
+    if (db.getUserByEmail(emailNorm))
+      return res.status(409).json({ ok: false, field: 'email', error: 'Este correo ya está registrado. Intenta iniciar sesión.' });
+    if (db.isPhoneTaken(phone))
+      return res.status(409).json({ ok: false, field: 'phone', error: 'Este número de celular ya está registrado.' });
+
+    const password_hash = await bcrypt.hash(password, 10);
+    const userId = db.createAuthUser({ username: username.trim(), email: emailNorm, password_hash, phone });
+    const user   = db.getUserById(userId);
+    const token  = jwt.sign({ id: user.id, email: user.email, username: user.username }, getJwtSecret(), { expiresIn: '30d' });
+
+    sendAuthWelcome(user).catch(() => {});
+
+    res.json({
+      ok: true, token,
+      user: { id: user.id, username: user.username, email: user.email, phone: user.phone },
+      message: '¡Bienvenido a HuntPrice Perú!'
+    });
+  } catch (e) {
+    console.error('[Auth] Register:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password, remember_me } = req.body;
+    if (!email || !password) return res.status(400).json({ ok: false, error: 'Correo y contraseña requeridos' });
+
+    const user = db.getUserByEmail(email.toLowerCase().trim());
+    if (!user || !user.password_hash)
+      return res.status(401).json({ ok: false, error: 'Correo o contraseña incorrectos' });
+    if (!user.active)
+      return res.status(401).json({ ok: false, error: 'Esta cuenta ha sido desactivada' });
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) return res.status(401).json({ ok: false, error: 'Correo o contraseña incorrectos' });
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, username: user.username },
+      getJwtSecret(),
+      { expiresIn: remember_me ? '30d' : '8h' }
+    );
+
+    res.json({
+      ok: true, token,
+      user: { id: user.id, username: user.username, email: user.email, phone: user.phone }
+    });
+  } catch (e) {
+    console.error('[Auth] Login:', e.message);
+    res.status(500).json({ ok: false, error: 'Error al iniciar sesión' });
+  }
+});
+
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  try {
+    const user = db.getUserById(req.authUser.id);
+    if (!user || !user.active) return res.status(401).json({ ok: false, error: 'Sesión inválida' });
+    res.json({ ok: true, user: { id: user.id, username: user.username, email: user.email, phone: user.phone } });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.delete('/api/auth/account', requireAuth, async (req, res) => {
+  try {
+    const user = db.getUserById(req.authUser.id);
+    if (!user || !user.active) return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    db.softDeleteUser(user.id);
+    sendAuthGoodbye(user).catch(() => {});
+    res.json({ ok: true, message: '¡Hasta pronto! Tu cuenta ha sido dada de baja.' });
+  } catch (e) {
+    console.error('[Auth] Delete account:', e.message);
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 

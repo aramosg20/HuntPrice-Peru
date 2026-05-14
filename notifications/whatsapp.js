@@ -104,4 +104,26 @@ async function testWhatsApp(to) {
   });
 }
 
-module.exports = { notifyWhatsApp, sendDigestWhatsApp, handleIncomingMessage, testWhatsApp, resetClient };
+async function sendWelcomeWhatsApp(user) {
+  const client = getClient();
+  if (!client || !user.phone) return;
+  const name = user.username || user.name || 'cazador de ofertas';
+  const to = `whatsapp:+51${user.phone}`;
+  await client.messages.create({
+    from: getFromNumber(), to,
+    body: `🔥 *¡Bienvenido a HuntPrice Perú, ${name}!*\n\nYa eres parte de la comunidad de cazadores de ofertas más activa del país.\n\n💬 Puedes chatear con HuntBot para encontrar las mejores ofertas en tiempo real.\n\n👉 https://huntprice.pe`
+  });
+}
+
+async function sendGoodbyeWhatsApp(user) {
+  const client = getClient();
+  if (!client || !user.phone) return;
+  const name = user.username || user.name || 'amigo';
+  const to = `whatsapp:+51${user.phone}`;
+  await client.messages.create({
+    from: getFromNumber(), to,
+    body: `😢 *Qué pena que nos dejes, ${name}.*\n\nTu cuenta en HuntPrice Perú ha sido dada de baja. Esperamos verte pronto.\n\nSi cambias de opinión, siempre puedes registrarte de nuevo. ¡Hasta pronto!`
+  });
+}
+
+module.exports = { notifyWhatsApp, sendDigestWhatsApp, handleIncomingMessage, testWhatsApp, resetClient, sendWelcomeWhatsApp, sendGoodbyeWhatsApp };

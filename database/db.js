@@ -122,7 +122,11 @@ function initSchema() {
     "CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku, store)",
     "CREATE INDEX IF NOT EXISTS idx_products_last_seen ON products(last_seen_at)",
     "CREATE INDEX IF NOT EXISTS idx_products_active ON products(active)",
-    "CREATE INDEX IF NOT EXISTS idx_products_price_updated ON products(price_updated_at)"
+    "CREATE INDEX IF NOT EXISTS idx_products_price_updated ON products(price_updated_at)",
+    // auth columns (users)
+    "ALTER TABLE users ADD COLUMN username TEXT",
+    "ALTER TABLE users ADD COLUMN password_hash TEXT",
+    "ALTER TABLE users ADD COLUMN phone TEXT"
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (_) { /* ya existe */ }
@@ -363,6 +367,40 @@ function getUserAlerts(userId) {
   `).all(userId);
 }
 
+// ─── Auth Users ──────────────────────────────────────────────────────────────
+
+function createAuthUser({ username, email, password_hash, phone }) {
+  const d = getDb();
+  try {
+    const result = d.prepare(
+      `INSERT INTO users (name, username, email, password_hash, phone, active)
+       VALUES (?,?,?,?,?,1)`
+    ).run(username.trim(), username.trim(), email, password_hash, phone || null);
+    return result.lastInsertRowid;
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) throw new Error('Email ya registrado');
+    throw e;
+  }
+}
+
+function getUserByEmail(email) {
+  return getDb().prepare('SELECT * FROM users WHERE email = ?').get(email) || null;
+}
+
+function getUserById(id) {
+  return getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) || null;
+}
+
+function isPhoneTaken(phone) {
+  return !!getDb().prepare('SELECT id FROM users WHERE phone = ? AND active = 1').get(phone);
+}
+
+function softDeleteUser(id) {
+  getDb().prepare(
+    'UPDATE users SET active = 0, password_hash = NULL WHERE id = ?'
+  ).run(id);
+}
+
 // ─── Logs ────────────────────────────────────────────────────────────────────
 
 function logScrape(data) {
@@ -563,5 +601,7 @@ module.exports = {
   createAlert, getUserAlerts, logScrape, getScrapeLogs,
   logNotification, getConfig, setConfig, isSetupDone,
   getUserByToken, updateUserProfile, getProductsForChat, searchProductsByKeyword,
-  purgeExpiredOffers, getTopExclusivos
+  purgeExpiredOffers, getTopExclusivos,
+  // auth
+  createAuthUser, getUserByEmail, getUserById, isPhoneTaken, softDeleteUser
 };

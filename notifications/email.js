@@ -285,4 +285,48 @@ function escStr(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-module.exports = { notifyUsers, sendLastChance, testEmail, sendAlertConfirmation, sendOfferEmail, resetTransporter };
+async function sendWelcomeEmail(user) {
+  const t = getTransporter();
+  if (!t) return;
+  const name = user.username || user.name || 'cazador de ofertas';
+  await t.sendMail({
+    from: `"HuntPrice Perú 🔥" <${process.env.GMAIL_USER || db.getConfig('gmail_user')}>`,
+    to: user.email,
+    subject: '🎉 ¡Bienvenido a HuntPrice Perú!',
+    html: `<div style="font-family:Inter,Arial,sans-serif;background:#0d0d0d;color:#fff;padding:32px;border-radius:14px;max-width:520px;margin:auto">
+      <div style="font-size:48px;text-align:center;margin-bottom:12px">🔥</div>
+      <h2 style="color:#FF6600;text-align:center;margin:0 0 8px">¡Bienvenido, ${name}!</h2>
+      <p style="color:#ccc;text-align:center;margin:0 0 24px;font-size:14px">Ya eres parte de la comunidad de cazadores de ofertas más activa de Perú.</p>
+      <div style="background:#1a1a1a;border-radius:10px;padding:20px;margin-bottom:20px">
+        <p style="margin:0 0 8px;font-size:14px;color:#fff">Con tu cuenta puedes:</p>
+        <ul style="color:#ccc;font-size:13px;margin:0;padding-left:20px;line-height:1.8">
+          <li>💬 Chatear con HuntBot para encontrar las mejores ofertas</li>
+          <li>🔔 Crear alertas personalizadas de precio</li>
+          <li>📊 Ver el historial de precios de cualquier producto</li>
+        </ul>
+      </div>
+      <a href="https://huntprice.pe" style="display:block;background:#FF6600;color:#fff;text-align:center;padding:13px;border-radius:9px;text-decoration:none;font-weight:700;font-size:15px">Ver ofertas ahora →</a>
+      <p style="color:#555;font-size:11px;text-align:center;margin-top:20px">HuntPrice Perú · Monitor automático de precios</p>
+    </div>`
+  });
+}
+
+async function sendGoodbyeEmail(user) {
+  const t = getTransporter();
+  if (!t) return;
+  const name = user.username || user.name || 'amigo';
+  await t.sendMail({
+    from: `"HuntPrice Perú 🔥" <${process.env.GMAIL_USER || db.getConfig('gmail_user')}>`,
+    to: user.email,
+    subject: '😢 Qué pena que nos dejes, HuntPrice Perú',
+    html: `<div style="font-family:Inter,Arial,sans-serif;background:#0d0d0d;color:#fff;padding:32px;border-radius:14px;max-width:520px;margin:auto">
+      <div style="font-size:48px;text-align:center;margin-bottom:12px">😢</div>
+      <h2 style="color:#FF6600;text-align:center;margin:0 0 8px">Qué pena que nos dejes, ${name}</h2>
+      <p style="color:#ccc;text-align:center;margin:0 0 20px;font-size:14px">Tu cuenta ha sido dada de baja exitosamente. Esperamos verte pronto.</p>
+      <p style="color:#888;font-size:13px;text-align:center">Si cambiás de opinión, siempre puedes crear una cuenta nueva en HuntPrice Perú.</p>
+      <p style="color:#555;font-size:11px;text-align:center;margin-top:24px">HuntPrice Perú · Monitor automático de precios</p>
+    </div>`
+  });
+}
+
+module.exports = { notifyUsers, sendLastChance, testEmail, sendAlertConfirmation, sendOfferEmail, resetTransporter, sendWelcomeEmail, sendGoodbyeEmail };
