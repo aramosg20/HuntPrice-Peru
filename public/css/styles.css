@@ -80,7 +80,7 @@ a:hover { text-decoration: underline; }
   gap: 10px;
   font-weight: 800;
   font-size: 20px;
-  color: var(--text);
+  color: #fff;   /* navbar stays dark in both themes — brand text must always be white */
 }
 
 .navbar-brand .logo-icon {
@@ -448,7 +448,7 @@ input[type="range"] {
 .excl-current {
   font-size: 16px;
   font-weight: 900;
-  color: var(--green);
+  color: var(--green-bright);   /* adapts: #00FF88 dark / #059669 light */
 }
 
 .excl-original {

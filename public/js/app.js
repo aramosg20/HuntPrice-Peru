@@ -21,6 +21,15 @@ const state = {
   authPrefs: null,   // loaded from /api/auth/preferences after login
 };
 
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
+function fmtPrice(n, decimals = 2) {
+  return Number(n).toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  });
+}
+
 // ─── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   applyTheme();
@@ -74,7 +83,7 @@ async function loadExclusivos() {
 
 function buildExclusivoCard(p) {
   const discount = Math.round(p.discount_percent);
-  const saving = (p.original_price - p.current_price).toFixed(2);
+  const saving = fmtPrice(p.original_price - p.current_price);
   const imgSrc = p.image_url || getPlaceholderImage(p.category);
   const isNew = p.first_seen_at && (Date.now() - new Date(p.first_seen_at).getTime()) < 24 * 60 * 60 * 1000;
   return `<div class="excl-card" onclick="openProductDetail(${p.id})" title="${escHtml(p.name)}">
@@ -87,8 +96,8 @@ function buildExclusivoCard(p) {
       <div class="excl-store">${escHtml(p.store)}</div>
       <div class="excl-name">${escHtml(p.name)}</div>
       <div class="excl-prices">
-        <span class="excl-current">S/. ${p.current_price.toFixed(2)}</span>
-        <span class="excl-original">S/. ${p.original_price.toFixed(2)}</span>
+        <span class="excl-current">S/. ${fmtPrice(p.current_price)}</span>
+        <span class="excl-original">S/. ${fmtPrice(p.original_price)}</span>
       </div>
       <div class="excl-saving">💰 Ahorras S/. ${saving}</div>
       <a class="excl-btn" href="${escHtml(p.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
@@ -265,7 +274,7 @@ function buildProductCard(p) {
   const isNew = p.first_seen_at && (Date.now() - new Date(p.first_seen_at).getTime()) < 24 * 60 * 60 * 1000;
   const isJustDetected = (Date.now() - new Date(p.detected_at).getTime()) < 10 * 60 * 1000;
   const isAlerted = state.alertedProducts.has(p.id);
-  const saving = (p.original_price - p.current_price).toFixed(2);
+  const saving = fmtPrice(p.original_price - p.current_price);
 
   const minutesAgo = Math.round((Date.now() - new Date(p.detected_at).getTime()) / 60000);
   const timeStr = minutesAgo < 1 ? 'justo ahora' :
@@ -287,8 +296,8 @@ function buildProductCard(p) {
       <div class="card-category">${escHtml(p.category || 'General')}${skuText}</div>
       <div class="card-name">${escHtml(p.name)}</div>
       <div class="card-prices">
-        <div class="original-price">Antes: S/. ${p.original_price.toFixed(2)}</div>
-        <div class="current-price"><span class="currency">S/. </span>${p.current_price.toFixed(2)}</div>
+        <div class="original-price">Antes: S/. ${fmtPrice(p.original_price)}</div>
+        <div class="current-price"><span class="currency">S/. </span>${fmtPrice(p.current_price)}</div>
       </div>
       <div class="card-meta">
         <span title="Score de urgencia">🔥 ${p.urgency_score}/10</span>
@@ -352,8 +361,8 @@ async function openProductDetail(id) {
         <div style="flex:1;min-width:200px">
           <div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">${escHtml(data.store)} • ${escHtml(data.category)}</div>
           <h3 style="font-size:16px;font-weight:700;margin-bottom:12px">${escHtml(data.name)}</h3>
-          <div style="font-size:13px;color:var(--text3);text-decoration:line-through">S/. ${(latest.original_price||0).toFixed(2)}</div>
-          <div style="font-size:28px;font-weight:900;color:var(--green-bright)">S/. ${(latest.current_price||0).toFixed(2)}</div>
+          <div style="font-size:13px;color:var(--text3);text-decoration:line-through">S/. ${fmtPrice(latest.original_price||0)}</div>
+          <div style="font-size:28px;font-weight:900;color:var(--green-bright)">S/. ${fmtPrice(latest.current_price||0)}</div>
           <div style="display:inline-block;background:var(--red);color:#fff;padding:3px 10px;border-radius:20px;font-weight:800;font-size:13px;margin-top:6px">-${discount}%</div>
           ${latest.is_historical_min ? '<div style="font-size:12px;color:var(--yellow);margin-top:8px">🏆 ¡Precio mínimo histórico!</div>' : ''}
         </div>
@@ -371,7 +380,7 @@ async function openProductDetail(id) {
             <tbody>${data.prices.slice(-8).reverse().map(pr => `
               <tr>
                 <td>${new Date(pr.detected_at).toLocaleString('es-PE', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
-                <td style="color:var(--green-bright)">S/. ${pr.current_price.toFixed(2)}</td>
+                <td style="color:var(--green-bright)">S/. ${fmtPrice(pr.current_price)}</td>
                 <td><span style="background:var(--red);color:#fff;padding:2px 6px;border-radius:10px;font-size:10px">-${Math.round(pr.discount_percent)}%</span></td>
               </tr>`).join('')}
             </tbody>
@@ -399,7 +408,7 @@ function buildPriceChart(prices) {
         ${vals.map((v, i) => `<circle cx="${i * w}" cy="${100 - ((v - min) / range) * 80}" r="2" fill="var(--orange)"/>`).join('')}
       </svg>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">
-        <span>S/. ${min.toFixed(0)}</span><span>S/. ${max.toFixed(0)}</span>
+        <span>S/. ${fmtPrice(min, 0)}</span><span>S/. ${fmtPrice(max, 0)}</span>
       </div>
     </div>
   </div>`;
@@ -683,7 +692,7 @@ function openProductAlertModal(productId, productName, currentPrice) {
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:18px">
         <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Producto seleccionado</div>
         <div style="font-size:14px;font-weight:600;line-height:1.4;margin-bottom:6px">${escHtml(productName)}</div>
-        <div style="font-size:20px;font-weight:900;color:var(--green-bright)">S/. ${Number(currentPrice).toFixed(2)}
+        <div style="font-size:20px;font-weight:900;color:var(--green-bright)">S/. ${fmtPrice(currentPrice)}
           <span style="font-size:12px;font-weight:400;color:var(--text3)"> precio actual</span>
         </div>
       </div>`;
@@ -694,7 +703,7 @@ function openProductAlertModal(productId, productName, currentPrice) {
   const priceInput = document.getElementById('alertTargetPrice');
   if (priceInput) priceInput.value = suggested;
   const hint = document.getElementById('alertPriceHint');
-  if (hint) hint.textContent = `Sugerido: S/. ${suggested} (10% bajo el precio actual)`;
+  if (hint) hint.textContent = `Sugerido: S/. ${fmtPrice(suggested)} (10% bajo el precio actual)`;
 
   // Resetear el form
   const form = document.getElementById('productAlertForm');
@@ -948,8 +957,8 @@ function renderChatProductCard(p) {
   const safeStore = escHtml(p.store || '');
   const safeUrl = escHtml(p.url || '#');
   const productId = p.id || 0;
-  const currentPrice = Number(p.current_price).toFixed(2);
-  const origPrice = Number(p.original_price).toFixed(2);
+  const currentPrice = fmtPrice(p.current_price);
+  const origPrice    = fmtPrice(p.original_price);
 
   return `<div class="chat-product-card">
     <img class="cpc-img" src="${imgSrc || placeholderSvg}" alt="${safeName}"
