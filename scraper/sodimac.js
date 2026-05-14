@@ -9,6 +9,22 @@ const UA    = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHT
 
 const BLOCKED_TYPES = new Set(['image', 'stylesheet', 'font', 'media']);
 
+// Tracker / analytics domains that keep the network busy without providing
+// product data — blocking them prevents networkidle from hanging indefinitely.
+const BLOCKED_DOMAINS = [
+  'google-analytics.com', 'googletagmanager.com', 'doubleclick.net',
+  'hotjar.com', 'newrelic.com', 'nr-data.net', 'tealiumiq.com',
+  'segment.io', 'amplitude.com', 'bat.bing.com', 'omtrdc.net',
+  'demdex.net', 'adobedtm.com', 'scorecardresearch.com', 'fbcdn.net',
+];
+
+function isTrackerUrl(url) {
+  for (const d of BLOCKED_DOMAINS) {
+    if (url.includes(d)) return true;
+  }
+  return false;
+}
+
 // Level-3 search URLs never redirect to home; /seleccion/ is a safe hub page.
 const CATEGORIAS_BASE = [
   `${BASE}/sodimac-pe/seleccion/ofertas-sodimac`,
@@ -39,8 +55,11 @@ function log(event, data = {}) {
 async function scrapeCategory(ctx, categoryUrl) {
   const page = await ctx.newPage();
   try {
+    // Block heavy resources AND known trackers — avoids networkidle hangs.
     await page.route('**/*', route => {
-      if (BLOCKED_TYPES.has(route.request().resourceType())) return route.abort();
+      const req = route.request();
+      if (BLOCKED_TYPES.has(req.resourceType())) return route.abort();
+      if (isTrackerUrl(req.url())) return route.abort();
       return route.continue();
     });
 
@@ -55,18 +74,86 @@ async function scrapeCategory(ctx, categoryUrl) {
       } catch (_) {}
     });
 
-    await page.goto(categoryUrl, { waitUntil: 'networkidle', timeout: 50000 });
-    await page.waitForTimeout(2000);
+    // domcontentloaded is fast; SPA fires API calls shortly after.
+    await page.goto(categoryUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // Allow initial XHR calls to resolve without waiting for full network idle.
+    await page.waitForTimeout(4000);
 
     if (apiProducts.length > 0) {
       log('scrape_api_captured', { url: categoryUrl, count: apiProducts.length });
       return apiProducts;
     }
 
-    // Plan B: read __NEXT_DATA__ from the fully-rendered page HTML.
-    log('scrape_nextdata_fallback', { url: categoryUrl });
+    // Plan B: __NEXT_DATA__ injected by Next.js SSR — no extra wait needed.
     const html = await page.content();
-    return extractFromNextData(html);
+    const nextDataProducts = extractFromNextData(html);
+    if (nextDataProducts.length > 0) {
+      log('scrape_nextdata_found', { url: categoryUrl, count: nextDataProducts.length });
+      return nextDataProducts;
+    }
+
+    // Plan C: live DOM evaluation with a short selector timeout as last resort.
+    log('scrape_dom_fallback', { url: categoryUrl });
+    try {
+      await page.waitForSelector('a.pod-link, [data-pod], [class*="pod-link"]', { timeout: 5000 });
+    } catch (_) {}
+
+    const domProducts = await page.evaluate(({ base }) => {
+      const results = [];
+      const seen    = new Set();
+      const links   = [
+        ...document.querySelectorAll('a.pod-link[href]'),
+        ...document.querySelectorAll('[data-pod] a[href]'),
+        ...document.querySelectorAll('[class*="pod-link"][href]'),
+      ];
+      for (const link of links.slice(0, 48)) {
+        try {
+          const href = link.getAttribute('href') || '';
+          const url  = href.startsWith('http') ? href : (href ? base + href : '');
+          if (!url || seen.has(url)) continue;
+          seen.add(url);
+
+          const pod  = link.closest('[class*="pod"], [data-pod]') || link;
+          const name = (
+            pod.querySelector('[class*="title"]')?.textContent ||
+            pod.querySelector('[class*="name"]')?.textContent  ||
+            link.title || ''
+          ).trim();
+          if (!name || name.length < 3) continue;
+
+          const saleEl  = pod.querySelector('[class*="price-sale"], [class*="sale-price"], [class*="price--sale"]');
+          const origEl  = pod.querySelector('[class*="price-crossed"], [class*="crossed"], [class*="price--normal"]');
+          const current  = parseFloat((saleEl?.textContent || '').replace(/[^\d,.]/g, '').replace(',', '.')) || 0;
+          const original = parseFloat((origEl?.textContent || '').replace(/[^\d,.]/g, '').replace(',', '.')) || 0;
+          if (!current || current < 5 || !original || original <= current) continue;
+
+          const discount = Math.round(((original - current) / original) * 100);
+          if (discount < 1 || discount > 100) continue;
+
+          const imgEl  = pod.querySelector('img[data-src], img[src]');
+          const imgSrc = imgEl?.getAttribute('data-src') || imgEl?.getAttribute('src') || '';
+          results.push({ name, url, imgSrc, current, original, discount });
+        } catch (_) {}
+      }
+      return results;
+    }, { base: BASE });
+
+    if (domProducts.length === 0) {
+      log('scrape_no_products', { url: categoryUrl });
+      return [];
+    }
+    log('scrape_dom_extracted', { url: categoryUrl, count: domProducts.length });
+    return domProducts.map(p => ({
+      store: STORE, name: p.name.substring(0, 120),
+      sku: urlToSku(p.url),
+      category: guessCategory(p.name),
+      url: p.url,
+      image_url: cleanScene7Url(p.imgSrc),
+      current_price: p.current,
+      original_price: Math.round(p.original * 100) / 100,
+      discount_percent: p.discount,
+      stock_info: null,
+    }));
   } finally {
     await page.close();
   }
