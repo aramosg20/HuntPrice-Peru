@@ -49,35 +49,24 @@ const USER_AGENTS = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
 ];
 
-// ── Mandatory categories ───────────────────────────────────────────────────────
-// Combinación de rutas /category/ (motor de 4 343 prods confirmado) y
-// /collection/ (cobertura garantizada de áreas clave como Cómodas y Bebé).
-// Fast mode escanea SOLO esta lista; full mode fusiona con discovery dinámico.
-const MANDATORY_PATHS = [
-  // ── Deals hub ──────────────────────────────────────────────────────────────
+// ── Category list — hardcoded, no dynamic discovery ───────────────────────────
+// cat40xxx = IDs de grilla real (no redirigen). cat629xxx = landing pages
+// protegidas que redirigen al Home. Las rutas /search?Ntt=... son fallback
+// para items específicos como Cómodas y Cambiadores.
+const CATEGORIAS_BASE = [
+  // Hubs de descuentos
   '/falabella-pe/collection/descuentos',
   '/falabella-pe/collection/descuentos-cmr',
-  // ── Categorías principales (motor confirmado ~4 300 prods) ─────────────────
-  '/falabella-pe/category/cat6290005/Tecnologia',
-  '/falabella-pe/category/cat6290004/Electrohogar',
-  '/falabella-pe/category/cat6290001/Moda',
-  '/falabella-pe/category/cat6290007/Muebles-y-Deco',
-  '/falabella-pe/category/cat6290008/Deportes',
-  '/falabella-pe/category/cat6290009/Mundo-Bebe',
-  '/falabella-pe/category/cat6290002/Belleza',
-  '/falabella-pe/category/cat6290006/Computacion',
-  '/falabella-pe/category/cat6290003/Ninos',
-  '/falabella-pe/category/cat6290010/Hogar',
-  // ── Colecciones clave — cobertura garantizada aunque /category/ falle ──────
-  '/falabella-pe/collection/muebles',
-  '/falabella-pe/collection/dormitorio',
-  '/falabella-pe/collection/colchones',
-  '/falabella-pe/collection/organizacion',
-  // ── Mundo Bebé — rutas específicas para asegurar Cómodas y Cambiadores ─────
-  '/falabella-pe/collection/mundo-bebe',
-  '/falabella-pe/collection/comodas-y-cambiadores',
-  '/falabella-pe/collection/carriolas-y-cochecitos',
-  '/falabella-pe/collection/cunas-y-camas-bebe',
+  // Grillas reales (IDs cat40xxx — confirmados)
+  '/falabella-pe/category/cat40497/Mundo-Bebe',
+  '/falabella-pe/category/cat40700/Muebles',
+  '/falabella-pe/category/cat40584/Electrohogar',
+  '/falabella-pe/category/cat40793/Tecnologia',
+  '/falabella-pe/category/cat1470548/Zapatillas',
+  '/falabella-pe/category/cat6370521/Linea-blanca',
+  // Búsqueda directa — garantiza la Cómoda Ternura aunque cambie el catID
+  '/falabella-pe/search?Ntt=comoda',
+  '/falabella-pe/search?Ntt=comodas+y+cambiadores',
 ];
 
 // ── Resource blocking ──────────────────────────────────────────────────────────
@@ -138,11 +127,12 @@ async function scrape(mode = 'fast') {
       { name: 'currentStoreSlug',  value: 'falabella-pe', domain: '.falabella.com.pe', path: '/' },
     ]);
 
-    // Fast mode skips discovery and uses the known-good mandatory list directly,
-    // saving one extra homepage navigation per cron run.
+    // Ambos modos parten de CATEGORIAS_BASE (IDs cat40xxx verificados).
+    // Full mode fusiona con discovery dinámico para cobertura extra nocturna.
+    // Fast mode (cron) nunca toca el Home — evita el redirect de cat629xxx.
     const paths = mode === 'full'
-      ? await discoverCategories(context)
-      : MANDATORY_PATHS;
+      ? dedupe([...CATEGORIAS_BASE, ...await discoverCategories(context)])
+      : CATEGORIAS_BASE;
     console.log(`[${STORE}] ${paths.length} categorías a procesar`);
 
     // Queue-based worker pool — CAT_CONCURRENCY workers pull from a shared queue.
@@ -192,7 +182,7 @@ async function discoverCategories(context) {
     const navPaths = navPathsFromNextData(nd);
     if (navPaths.length >= 4) {
       console.log(`[${STORE}] Discovery via __NEXT_DATA__: ${navPaths.length} paths`);
-      const merged = dedupe([...MANDATORY_PATHS, ...navPaths]);
+      const merged = dedupe([...CATEGORIAS_BASE, ...navPaths]);
       console.log(`[${STORE}] Total tras fusión: ${merged.length} paths`);
       return merged;
     }
@@ -211,7 +201,7 @@ async function discoverCategories(context) {
 
     if (domPaths.length >= 2) {
       console.log(`[${STORE}] Discovery via DOM: ${domPaths.length} paths`);
-      const merged = dedupe([...MANDATORY_PATHS, ...domPaths]);
+      const merged = dedupe([...CATEGORIAS_BASE, ...domPaths]);
       console.log(`[${STORE}] Total tras fusión: ${merged.length} paths`);
       return merged;
     }
@@ -223,7 +213,7 @@ async function discoverCategories(context) {
   }
 
   console.warn(`[${STORE}] Discovery falló — usando paths obligatorios`);
-  return MANDATORY_PATHS;
+  return CATEGORIAS_BASE;
 }
 
 /**
@@ -411,10 +401,20 @@ async function paginateViaNextData(page, categoryUrl, buildId, maxPages, mode, p
  * (or DOM fallback). Used when buildId is unavailable or _next/data returns nothing.
  */
 async function paginateViaUrl(page, categoryUrl, maxPages, mode, products, seen) {
-  const baseUrl = categoryUrl.split('?')[0];
+  // URL API preserves existing query params, critical for search URLs:
+  // /search?Ntt=comoda → /search?Ntt=comoda&page=2  (not /search?page=2)
+  const buildPagedUrl = p => {
+    try {
+      const u = new URL(categoryUrl);
+      u.searchParams.set('page', p);
+      return u.href;
+    } catch (_) {
+      return `${categoryUrl.split('?')[0]}?page=${p}`;
+    }
+  };
 
   for (let p = 2; p <= maxPages; p++) {
-    const pageUrl = `${baseUrl}?page=${p}`;
+    const pageUrl = buildPagedUrl(p);
     try {
       await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
       const nd = await extractNextData(page);
