@@ -44,34 +44,38 @@ async function scrapeCategory(ctx, categoryUrl) {
       return route.continue();
     });
 
-    // Plan A: Promise-based GraphQL / XHR interception.
-    // resolveProducts() fires as soon as ≥4 products arrive; the 10 s race is the safety timeout.
-    const apiProducts = [];
-    let resolveProducts;
-    const productsReady = new Promise(resolve => { resolveProducts = resolve; });
-
-    page.on('response', async resp => {
+    // Plan A: waitForResponse registered BEFORE goto — truly blocking interception.
+    // The async predicate validates JSON content so analytics/config responses are
+    // skipped without releasing the wait. 15 s covers slow category grids.
+    const apiResponsePromise = page.waitForResponse(async res => {
       try {
-        const type = resp.request().resourceType();
-        if (type !== 'fetch' && type !== 'xhr') return;
-        if (!resp.url().includes('sodimac.com')) return;
-        const ct = resp.headers()['content-type'] || '';
-        if (!ct.includes('json')) return;
-        const json = await resp.json().catch(() => null);
-        if (!json) return;
-        const before = apiProducts.length;
-        extractFromApiJson(json, apiProducts);
-        if (apiProducts.length > before && apiProducts.length >= 4) resolveProducts();
-      } catch (_) {}
-    });
+        if (res.request().resourceType() !== 'fetch' && res.request().resourceType() !== 'xhr') return false;
+        if (!res.url().includes('sodimac.com')) return false;
+        const ct = res.headers()['content-type'] || '';
+        if (!ct.includes('json')) return false;
+        const json = await res.json().catch(() => null);
+        if (!json) return false;
+        const probe = [];
+        extractFromApiJson(json, probe);
+        return probe.length >= 4;   // only resolve when we have real product data
+      } catch (_) { return false; }
+    }, { timeout: 15000 }).catch(() => null);
 
     await page.goto(categoryUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    // Wait up to 10 s for XHR/GraphQL data; resolves early when enough products arrive.
-    await Promise.race([productsReady, new Promise(r => setTimeout(r, 10000))]);
 
-    if (apiProducts.length > 0) {
-      log('scrape_api_captured', { url: categoryUrl, count: apiProducts.length });
-      return apiProducts;
+    // Block in the main execution flow until the product API responds or 15 s elapse.
+    const apiResponse = await apiResponsePromise;
+
+    if (apiResponse) {
+      const json = await apiResponse.json().catch(() => null);
+      if (json) {
+        const products = [];
+        extractFromApiJson(json, products);
+        if (products.length > 0) {
+          log('scrape_api_captured', { url: categoryUrl, count: products.length });
+          return products;
+        }
+      }
     }
 
     // Plan B: __NEXT_DATA__ injected by Next.js SSR into initial HTML.
