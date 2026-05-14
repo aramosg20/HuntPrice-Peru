@@ -21,6 +21,7 @@ const state = {
   authPrefs: null,   // loaded from /api/auth/preferences after login
   // ── Smart search / HuntBot grid override ──
   gridOverride: null, // { source: 'search'|'huntbot', products: [...], query: '' }
+  searchTerms: [],    // expanded terms returned by Gemini for the active search
   // ── Top Exclusivos UI ──
   exclusivosExpanded: true
 };
@@ -32,6 +33,18 @@ function fmtPrice(n, decimals = 2) {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals
   });
+}
+
+function renderSearchTermsInfo() {
+  const el = document.getElementById('searchTermsInfo');
+  if (!el) return;
+  if (!state.searchTerms || state.searchTerms.length === 0) {
+    el.style.display = 'none';
+    return;
+  }
+  const listEl = document.getElementById('searchTermsList');
+  if (listEl) listEl.textContent = state.searchTerms.join(', ');
+  el.style.display = '';
 }
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
@@ -204,6 +217,8 @@ async function executeSmartSearch(query) {
   if (!query) {
     state.gridOverride = null;
     state.filters.search = '';
+    state.searchTerms = [];
+    renderSearchTermsInfo();
     return reloadProducts();
   }
   const grid = document.getElementById('productsGrid');
@@ -214,6 +229,8 @@ async function executeSmartSearch(query) {
       body: { query }
     });
     state.gridOverride = { source: 'search', products: json.products, query };
+    state.searchTerms = json.terms || [];
+    renderSearchTermsInfo();
     const countEl = document.getElementById('resultsCount');
     if (countEl) countEl.textContent = `${json.products.length} resultado${json.products.length !== 1 ? 's' : ''}`;
     const loadMoreBtn = document.getElementById('loadMoreBtn');
@@ -221,8 +238,10 @@ async function executeSmartSearch(query) {
     renderProducts(json.products, true);
     if (json.products.length === 0) showToast('🔍', 'Sin resultados', `No encontré productos para "${query}"`);
   } catch (e) {
-    // Fallback to plain text filter
+    // Fallback to plain text filter — no semantic terms available
     state.gridOverride = null;
+    state.searchTerms = [];
+    renderSearchTermsInfo();
     state.filters.search = query;
     reloadProducts();
   }
@@ -251,6 +270,8 @@ function resetFilters() {
 // ─── Products ─────────────────────────────────────────────────────────────────
 function reloadProducts() {
   state.gridOverride = null;
+  state.searchTerms = [];
+  renderSearchTermsInfo();
   state.offset = 0;
   state.products = [];
   return loadProducts(true);
