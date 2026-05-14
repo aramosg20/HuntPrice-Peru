@@ -33,6 +33,8 @@
   --text2: #555555;
   --text3: #999999;
   --shadow: 0 4px 24px rgba(0,0,0,0.1);
+  /* Deeper emerald so price numbers stay legible on white/cream cards */
+  --green-bright: #059669;
 }
 
 /* ─── Reset & Base ───────────────────────────────────────────────────────────── */
@@ -137,6 +139,10 @@ a:hover { text-decoration: underline; }
   padding: 28px 20px;
 }
 
+[data-theme="light"] .hero {
+  background: linear-gradient(135deg, #fff7ed 0%, #fafafa 55%, #f0fdf4 100%);
+}
+
 .hero-inner { max-width: 1400px; margin: 0 auto; }
 
 .hero h1 {
@@ -144,6 +150,7 @@ a:hover { text-decoration: underline; }
   font-weight: 900;
   line-height: 1.2;
   margin-bottom: 6px;
+  color: var(--text);
 }
 
 .hero h1 .highlight { color: var(--orange); }
