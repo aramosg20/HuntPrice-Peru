@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hotprice Perú | Próximamente</title>
+  <meta name="description" content="El radar de ofertas de Perú se está encendiendo. Lanzamiento oficial próximamente.">
+  <meta name="theme-color" content="#FF4500">
+  <link rel="icon" type="image/svg+xml" href="/assets/brand/favicon.svg">
+  <link rel="stylesheet" href="/css/styles.css">
+  <style>
+    /* ── Coming Soon specific ── */
+    @keyframes radarPulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(255,69,0,.5), 0 0 0 0 rgba(255,69,0,.3); }
+      50%      { box-shadow: 0 0 0 20px rgba(255,69,0,0), 0 0 0 40px rgba(255,69,0,0); }
+    }
+    @keyframes floatIcon {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-10px); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .cs-wrapper {
+      min-height: calc(100vh - 60px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px 80px;
+      background: radial-gradient(ellipse at 30% 20%, rgba(255,69,0,0.08) 0%, transparent 55%),
+                  radial-gradient(ellipse at 70% 80%, rgba(46,204,113,0.04) 0%, transparent 50%),
+                  var(--color-bg);
+    }
+
+    .cs-inner {
+      max-width: 580px;
+      width: 100%;
+      text-align: center;
+      animation: fadeUp .6s ease both;
+    }
+
+    .cs-icon-wrap {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(255,69,0,.18), rgba(255,69,0,.06));
+      border: 2px solid rgba(255,69,0,.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 32px;
+      animation: radarPulse 2.4s ease-in-out infinite, floatIcon 4s ease-in-out infinite;
+    }
+
+    .cs-icon-wrap img {
+      width: 54px;
+      height: 54px;
+      object-fit: contain;
+    }
+
+    .cs-eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--color-primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .cs-eyebrow::before,
+    .cs-eyebrow::after {
+      content: '';
+      flex: 1;
+      max-width: 60px;
+      height: 1px;
+      background: linear-gradient(to right, transparent, rgba(255,69,0,.4));
+    }
+    .cs-eyebrow::after {
+      background: linear-gradient(to left, transparent, rgba(255,69,0,.4));
+    }
+
+    .cs-h1 {
+      font-size: clamp(26px, 5vw, 42px);
+      font-weight: 900;
+      line-height: 1.2;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .cs-h1 .highlight { color: var(--color-primary); }
+
+    .cs-subtitle {
+      font-size: 16px;
+      color: var(--text2);
+      line-height: 1.6;
+      margin-bottom: 40px;
+    }
+
+    .cs-form {
+      display: flex;
+      gap: 10px;
+      max-width: 460px;
+      margin: 0 auto 16px;
+    }
+
+    @media (max-width: 480px) {
+      .cs-form { flex-direction: column; }
+    }
+
+    .cs-input {
+      flex: 1;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 13px 18px;
+      border-radius: 50px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .cs-input:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(255,69,0,.2);
+    }
+
+    .cs-input::placeholder { color: var(--text3); }
+
+    .cs-btn {
+      background: linear-gradient(135deg, var(--color-primary), var(--orange-dark));
+      color: #fff;
+      border: none;
+      padding: 13px 28px;
+      border-radius: 50px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: filter .2s, transform .15s;
+      flex-shrink: 0;
+    }
+
+    .cs-btn:hover  { filter: brightness(1.12); transform: scale(1.03); }
+    .cs-btn:active { transform: scale(.97); }
+    .cs-btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+
+    .cs-feedback {
+      font-size: 13px;
+      min-height: 20px;
+      transition: opacity .2s;
+    }
+
+    .cs-feedback.success { color: var(--color-success); }
+    .cs-feedback.error   { color: var(--red); }
+
+    .cs-stores {
+      margin-top: 48px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+    }
+
+    .cs-stores-label {
+      font-size: 11px;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 14px;
+    }
+
+    .cs-store-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .cs-chip {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text2);
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+    }
+
+    /* live-badge animation reuse */
+    .cs-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-primary);
+      background: rgba(255,69,0,.1);
+      border: 1px solid rgba(255,69,0,.25);
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 24px;
+      animation: blink 2.5s ease-in-out infinite;
+    }
+
+    .cs-live-dot {
+      width: 7px; height: 7px;
+      background: var(--color-primary);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── Navbar ─── -->
+<nav class="navbar">
+  <div class="navbar-brand">
+    <div class="logo-icon"><img src="/assets/brand/hotprice-logo.svg" alt="Hotprice" style="width:22px;height:22px;object-fit:contain;"></div>
+    Hot<span>price</span>&nbsp;Perú
+  </div>
+  <div class="navbar-right">
+    <div class="live-badge">
+      <span class="live-dot"></span>
+      PRÓXIMAMENTE
+    </div>
+  </div>
+</nav>
+
+<!-- ─── Coming Soon ─── -->
+<div class="cs-wrapper">
+  <div class="cs-inner">
+
+    <div class="cs-icon-wrap">
+      <img src="/assets/brand/caze-icon.svg" alt="Caze">
+    </div>
+
+    <div class="cs-eyebrow">Caze está en línea</div>
+
+    <h1 class="cs-h1">
+      El radar se está <span class="highlight">encendiendo</span>.<br>
+      Lanzamiento oficial próximamente.
+    </h1>
+
+    <p class="cs-subtitle">
+      Cazaremos ofertas de Falabella, Ripley, Oechsle, Sodimac,<br>
+      Promart, PlazaVea, Mercado Libre, Coolbox y Samsung<br>
+      cada 15 minutos — y te avisaremos antes que nadie.
+    </p>
+
+    <form class="cs-form" id="waitlistForm" onsubmit="joinWaitlist(event)">
+      <input
+        class="cs-input"
+        type="email"
+        id="emailInput"
+        placeholder="tu@email.com"
+        autocomplete="email"
+        required
+      >
+      <button class="cs-btn" type="submit" id="submitBtn">
+        Únete a la cacería
+      </button>
+    </form>
+
+    <p class="cs-feedback" id="feedback"></p>
+
+    <div class="cs-stores">
+      <div class="cs-stores-label">Tiendas monitoreadas</div>
+      <div class="cs-store-chips">
+        <span class="cs-chip">Falabella</span>
+        <span class="cs-chip">Ripley</span>
+        <span class="cs-chip">Oechsle</span>
+        <span class="cs-chip">Sodimac</span>
+        <span class="cs-chip">Promart</span>
+        <span class="cs-chip">PlazaVea</span>
+        <span class="cs-chip">Mercado Libre</span>
+        <span class="cs-chip">Coolbox</span>
+        <span class="cs-chip">Samsung</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+async function joinWaitlist(e) {
+  e.preventDefault();
+  const email   = document.getElementById('emailInput').value.trim();
+  const btn     = document.getElementById('submitBtn');
+  const fb      = document.getElementById('feedback');
+
+  btn.disabled = true;
+  btn.textContent = 'Registrando…';
+  fb.className = 'cs-feedback';
+  fb.textContent = '';
+
+  try {
+    const res  = await fetch('/api/waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const json = await res.json();
+
+    if (json.ok) {
+      fb.className = 'cs-feedback success';
+      fb.textContent = json.already
+        ? '✓ Ya estás en la lista — te avisaremos en el lanzamiento.'
+        : '✓ ¡Listo! Serás de los primeros en cazar las mejores ofertas.';
+      document.getElementById('emailInput').value = '';
+      btn.textContent = '✓ Registrado';
+    } else {
+      throw new Error(json.error || 'Error al registrar');
+    }
+  } catch (err) {
+    fb.className = 'cs-feedback error';
+    fb.textContent = '✗ ' + (err.message || 'Intenta nuevamente');
+    btn.disabled = false;
+    btn.textContent = 'Únete a la cacería';
+  }
+}
+</script>
+
+</body>
+</html>

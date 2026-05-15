@@ -97,6 +97,12 @@ function initSchema() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS waitlist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_prices_product ON prices(product_id);
     CREATE INDEX IF NOT EXISTS idx_prices_discount ON prices(discount_percent);
     CREATE INDEX IF NOT EXISTS idx_prices_detected ON prices(detected_at);

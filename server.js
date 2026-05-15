@@ -1352,9 +1352,37 @@ app.get('/api/setup/status', (req, res) => {
   res.json({ ok: true, done: db.isSetupDone() });
 });
 
+// ── Waitlist ───────────────────────────────────────────────────────────────────
+
+app.post('/api/waitlist', (req, res) => {
+  try {
+    const email = (req.body?.email || '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ ok: false, error: 'Email inválido' });
+    }
+    const d = db.getDb();
+    try {
+      d.prepare('INSERT INTO waitlist (email) VALUES (?)').run(email);
+      console.log(`[Waitlist] nuevo suscriptor: ${maskEmail(email)}`);
+      return res.json({ ok: true });
+    } catch (e) {
+      if (e.message.includes('UNIQUE')) {
+        return res.json({ ok: true, already: true });
+      }
+      throw e;
+    }
+  } catch (e) {
+    console.error('[Waitlist]', e.message);
+    res.status(500).json({ ok: false, error: 'Error interno' });
+  }
+});
+
 // ─── SPA Fallback ─────────────────────────────────────────────────────────────
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/', (req, res) => {
+  const maintenance = process.env.MAINTENANCE_MODE === 'true';
+  res.sendFile(path.join(__dirname, 'public', maintenance ? 'coming-soon.html' : 'index.html'));
+});
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/perfil', (req, res) => res.sendFile(path.join(__dirname, 'public', 'perfil.html')));
 
@@ -1363,11 +1391,12 @@ app.get('/perfil', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pe
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔══════════════════════════════════════════════════╗
-║        🔥  HUNTPRICE PERÚ  v1.0.0               ║
+║        🔥  HOTPRICE PERÚ  v2.0.0               ║
 ╠══════════════════════════════════════════════════╣
 ║  Servidor:   http://localhost:${PORT}              ║
 ║  Admin:      http://localhost:${PORT}/admin        ║
 ║  Setup:      http://localhost:${PORT}/setup.html   ║
+║  Modo:       ${process.env.MAINTENANCE_MODE === 'true' ? 'COMING SOON 🚧             ' : 'DASHBOARD ACTIVO ✅         '}║
 ╚══════════════════════════════════════════════════╝
   `);
 
