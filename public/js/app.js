@@ -19,8 +19,8 @@ const state = {
   authToken: localStorage.getItem('hp_auth_token') || null,
   authUser:  JSON.parse(localStorage.getItem('hp_auth_user') || 'null'),
   authPrefs: null,   // loaded from /api/auth/preferences after login
-  // ── Smart search / HuntBot grid override ──
-  gridOverride: null, // { source: 'search'|'huntbot', products: [...], query: '' }
+  // ── Smart search / Caze grid override ──
+  gridOverride: null, // { source: 'search'|'caze', products: [...], query: '' }
   searchTerms: [],    // expanded terms returned by Gemini for the active search
   // ── Top Exclusivos UI ──
   exclusivosExpanded: true
@@ -869,7 +869,7 @@ function applyProfileFilters() {
   localStorage.setItem('hp_profile_auto', '1');
 }
 
-// ─── HuntBot Chatbot ───────────────────────────────────────────────────────────
+// ─── Caze Chatbot ─────────────────────────────────────────────────────────────
 let chatHistory = [];
 let chatOpen = false;
 let chatLastProduct = null; // last product mentioned, used for notifications
@@ -886,7 +886,7 @@ function toggleChat() {
     if (messages && !messages.children.length) {
       // Render initial greeting (personalized if authed)
       if (state.authUser) {
-        messages.innerHTML = `<div class="chat-msg bot">¡Hola, <strong>${escHtml(state.authUser.username)}</strong>! 👋 Soy HuntBot, estoy listo para ayudarte a encontrar las mejores ofertas. ¿En qué te puedo ayudar hoy?</div>`;
+        messages.innerHTML = `<div class="chat-msg bot">Radar activo. ¡Hola, <strong>${escHtml(state.authUser.username)}</strong>! 🔥 Soy Caze. He detectado bajas críticas en los precios de hoy. ¿Qué oferta quieres cazar?</div>`;
         setChatInputEnabled(true);
       } else {
         renderChatLocked(messages);
@@ -1107,8 +1107,8 @@ async function executeFilterAction(fa) {
   if (!fa || !fa.query) return null;
 
   if (fa.products && fa.products.length > 0) {
-    // Embedded products from HuntBot — render directly, never touch the search bar
-    state.gridOverride = { source: 'huntbot', products: fa.products, query: fa.query };
+    // Embedded products from Caze — render directly, never touch the search bar
+    state.gridOverride = { source: 'caze', products: fa.products, query: fa.query };
     renderProducts(fa.products, true);
     const countEl = document.getElementById('resultsCount');
     if (countEl) countEl.textContent = `${fa.products.length} resultado${fa.products.length !== 1 ? 's' : ''}`;
@@ -1458,7 +1458,7 @@ async function doRegister(event) {
     localStorage.setItem('hp_auth_user',  JSON.stringify(json.user));
     closeModal('registerModal');
     updateProfileNavBtn();
-    showToast('🎉', '¡Cuenta creada!', json.message || '¡Bienvenido a HuntPrice!', 'success');
+    showToast('🎉', '¡Cuenta creada!', json.message || '¡Bienvenido a Hotprice!', 'success');
     resetChatForAuth();
     loadAndApplyAuthPrefs();
   } catch (e) {
@@ -1637,7 +1637,7 @@ async function confirmDeleteAccount() {
 }
 
 function showForgotPassword() {
-  showToast('📧', 'Recuperar contraseña', 'Escríbenos a soporte@huntprice.pe para recuperar tu acceso', 'info');
+  showToast('📧', 'Recuperar contraseña', 'Escríbenos a soporte@hotprice.pe para recuperar tu acceso', 'info');
 }
 
 function togglePwVisible(inputId, btn) {

@@ -1,7 +1,7 @@
 {
-  "name": "huntprice-peru",
-  "version": "1.0.0",
-  "description": "Monitor de ofertas flash de tiendas peruanas",
+  "name": "hotprice-peru",
+  "version": "2.0.0",
+  "description": "Radar de ofertas en tiempo real de tiendas peruanas",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -1,0 +1,7 @@
+<svg width="250" height="60" viewBox="0 0 250 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M35 45C35 45 30 40 30 32C30 24 38 15 38 15C38 15 46 24 46 32C46 40 41 45 41 45H35Z" fill="#FF4500"/>
+  <path d="M38 48C38 48 25 40 25 28C25 16 38 5 38 5C38 5 51 16 51 28C51 40 38 48 38 48Z" stroke="#FF4500" stroke-width="3" stroke-linecap="round"/>
+  
+  <text x="65" y="42" font-family="Arial, sans-serif" font-weight="900" font-size="32" fill="#FF4500">HOT</text>
+  <text x="135" y="42" font-family="Arial, sans-serif" font-weight="900" font-size="32" fill="#FFFFFF">PRICE</text>
+</svg>

@@ -1,15 +1,15 @@
 {
-  "name": "HuntPrice Perú",
-  "short_name": "HuntPrice",
-  "description": "Monitor de ofertas flash de tiendas peruanas",
+  "name": "Hotprice Perú",
+  "short_name": "Hotprice",
+  "description": "Radar de ofertas en tiempo real de tiendas peruanas",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0d0d0d",
-  "theme_color": "#FF6600",
+  "background_color": "#1A1A1A",
+  "theme_color": "#FF4500",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%23FF6600'/><text y='140' x='20' font-size='140'>🔥</text></svg>",
+      "src": "/assets/brand/favicon.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any maskable"
