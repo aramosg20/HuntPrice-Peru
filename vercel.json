@@ -1,8 +1,14 @@
 {
+  "outputDirectory": "public",
   "framework": null,
   "buildCommand": "",
-  "outputDirectory": "public",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/coming-soon.html" }
+  "routes": [
+    { "src": "^/css/(.*)$",         "dest": "/css/$1" },
+    { "src": "^/js/(.*)$",          "dest": "/js/$1" },
+    { "src": "^/assets/(.*)$",      "dest": "/assets/$1" },
+    { "src": "^/icons/(.*)$",       "dest": "/icons/$1" },
+    { "src": "^/manifest\\.json$",  "dest": "/manifest.json" },
+    { "src": "^/sw\\.js$",          "dest": "/sw.js" },
+    { "src": "^/(.*)$",             "dest": "/coming-soon.html" }
   ]
 }
